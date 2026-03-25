@@ -206,3 +206,17 @@
 {"timestamp":"2026-03-25T15:47:58.696Z","type":"INFO","message":"Trailing Stop-Loss actualizado","data":{"oldStop":"2131.60","newStop":"2135.39","currentPrice":"2161.33"}}
 {"timestamp":"2026-03-25T15:47:59.403Z","type":"TRADE","message":"Ordem executada: BUY SOLUSDT","data":{"symbol":"SOLUSDT","quantity":3.45,"orderId":3791586}}
 {"timestamp":"2026-03-25T15:48:42.727Z","type":"INFO","message":"Bot multi-par arrancado","data":{"pairs":["BTCUSDT","ETHUSDT","SOLUSDT"]}}
+{"timestamp":"2026-03-25T16:02:57.399Z","type":"INFO","message":"Fear & Greed Index","data":{"value":14,"classification":"Extreme Fear"}}
+{"timestamp":"2026-03-25T16:02:57.524Z","type":"ERROR","message":"Erro ao obter notícias","data":{"message":"Request failed with status code 404"}}
+{"timestamp":"2026-03-25T16:02:57.526Z","type":"INFO","message":"Ciclo iniciado","data":{"balance":"918.48","fearGreed":14,"newsSignal":"NEUTRAL"}}
+{"timestamp":"2026-03-25T16:02:57.526Z","type":"WARN","message":"LIMITE DE PERDA DIÁRIA ATINGIDO — bot pausado","data":{"dailyStartBalance":1000,"currentBalance":918.4769623,"lossPercent":"8.15%"}}
+{"timestamp":"2026-03-25T16:06:47.462Z","type":"INFO","message":"Bot multi-par arrancado","data":{"pairs":["BTCUSDT","ETHUSDT","BNBUSDT"]}}
+{"timestamp":"2026-03-25T16:07:12.965Z","type":"INFO","message":"Bot multi-par arrancado","data":{"pairs":["BTCUSDT","ETHUSDT","BNBUSDT"]}}
+{"timestamp":"2026-03-25T16:07:13.263Z","type":"INFO","message":"Saldo inicial do dia definido","data":{"balance":918.4769623}}
+{"timestamp":"2026-03-25T16:07:14.045Z","type":"INFO","message":"Fear & Greed Index","data":{"value":14,"classification":"Extreme Fear"}}
+{"timestamp":"2026-03-25T16:07:14.183Z","type":"ERROR","message":"Erro ao obter notícias","data":{"message":"Request failed with status code 404"}}
+{"timestamp":"2026-03-25T16:07:14.184Z","type":"INFO","message":"Ciclo iniciado","data":{"balance":"918.48","fearGreed":14,"newsSignal":"NEUTRAL"}}
+{"timestamp":"2026-03-25T16:07:14.927Z","type":"INFO","message":"Análise BTCUSDT","data":{"interval":"1h","price":70833.29,"rsi":"56.44","signal":"WAIT","score":64}}
+{"timestamp":"2026-03-25T16:07:14.946Z","type":"INFO","message":"Análise ETHUSDT","data":{"interval":"30m","price":2159.55,"rsi":"36.60","signal":"WAIT","score":88}}
+{"timestamp":"2026-03-25T16:07:15.406Z","type":"INFO","message":"Análise BNBUSDT","data":{"interval":"1h","price":645.82,"rsi":"66.07","signal":"WAIT","score":64}}
+{"timestamp":"2026-03-25T16:07:15.651Z","type":"TRADE","message":"Ordem executada: BUY ETHUSDT","data":{"symbol":"ETHUSDT","quantity":0.1466,"orderId":13816959}}

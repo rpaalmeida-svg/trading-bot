@@ -94,5 +94,21 @@
     "closePrice": null,
     "closeTimestamp": null,
     "closeReason": null
+  },
+  {
+    "id": 1774454835654,
+    "symbol": "ETHUSDT",
+    "side": "BUY",
+    "price": 2159.55,
+    "quantity": 0.1466,
+    "stopLoss": 2105.56125,
+    "takeProfit": 2267.5275,
+    "timestamp": "2026-03-25T16:07:15.654Z",
+    "closed": false,
+    "profit": null,
+    "profitPercent": null,
+    "closePrice": null,
+    "closeTimestamp": null,
+    "closeReason": null
   }
 ]

@@ -10,7 +10,7 @@ const strategy = require('./strategy');
 const risk = require('./risk');
 const telegram = require('./telegram');
 const { getFearGreedIndex, getEmoji } = require('./sentiment');
-const { PAIRS, calcScore, allocateCapital, getReason } = require('./portfolio');
+const { PAIRS, PAIR_CONFIG, calcScore, allocateCapital, getReason } = require('./portfolio');
 const { recordBuy, recordSell, getStats } = require('./history');
 const { getNewsSentiment } = require('./news');
 
@@ -22,7 +22,17 @@ const STATE_FILE = path.join(__dirname, '../logs/state.json');
 
 let initialBalance = null;
 
-// --- PERSISTÊNCIA DE POSIÇÕES ---
+const positions = {};
+PAIRS.forEach(p => {
+  positions[p] = {
+    inPosition: false,
+    entryPrice: null,
+    stopLoss: null,
+    takeProfit: null,
+    quantity: null
+  };
+});
+
 function savePositions() {
   fs.writeFileSync(POSITIONS_FILE, JSON.stringify(positions, null, 2));
 }
@@ -34,7 +44,7 @@ function loadPositions() {
       PAIRS.forEach(p => {
         if (data[p]) positions[p] = data[p];
       });
-      logger.info('Posições carregadas do ficheiro', { positions });
+      logger.info('Posições carregadas', { positions });
     }
   } catch (err) {
     logger.error('Erro ao carregar posições', { message: err.message });
@@ -57,22 +67,8 @@ function loadState() {
   return null;
 }
 
-const positions = {};
-PAIRS.forEach(p => {
-  positions[p] = {
-    inPosition: false,
-    entryPrice: null,
-    stopLoss: null,
-    takeProfit: null,
-    quantity: null
-  };
-});
-
 function sign(queryString) {
-  return crypto
-    .createHmac('sha256', SECRET_KEY)
-    .update(queryString)
-    .digest('hex');
+  return crypto.createHmac('sha256', SECRET_KEY).update(queryString).digest('hex');
 }
 
 async function getBalance() {
@@ -88,23 +84,20 @@ async function getBalance() {
 }
 
 async function getPrice(symbol) {
-  const res = await axios.get(`${BASE_URL}/v3/ticker/price`, {
-    params: { symbol }
-  });
+  const res = await axios.get(`${BASE_URL}/v3/ticker/price`, { params: { symbol } });
   return parseFloat(res.data.price);
 }
 
 async function getPriceHistory(symbol) {
+  const config = PAIR_CONFIG[symbol];
   const res = await axios.get(`${BASE_URL}/v3/klines`, {
-    params: { symbol, interval: '15m', limit: 50 }
+    params: { symbol, interval: config.interval, limit: 50 }
   });
   return res.data.map(k => parseFloat(k[4]));
 }
 
 async function getVolume(symbol) {
-  const res = await axios.get(`${BASE_URL}/v3/ticker/24hr`, {
-    params: { symbol }
-  });
+  const res = await axios.get(`${BASE_URL}/v3/ticker/24hr`, { params: { symbol } });
   return parseFloat(res.data.quoteVolume);
 }
 
@@ -126,19 +119,32 @@ async function analyzePair(symbol, sentiment) {
     const prices = await getPriceHistory(symbol);
     const currentPrice = await getPrice(symbol);
     const volume = await getVolume(symbol);
-    const analysis = strategy.analyzeMarket(prices);
+    const pairConfig = PAIR_CONFIG[symbol];
+
+    // Usar estratégia com RSI específico do par
+    const rsi = strategy.calculateRSI(prices, 14);
+    const smaFast = strategy.calculateSMA(prices, 9);
+    const smaSlow = strategy.calculateSMA(prices, 21);
+
+    let signal = 'WAIT';
+    if (rsi && smaFast && smaSlow) {
+      if (rsi < pairConfig.rsiBuy && smaFast > smaSlow) signal = 'BUY';
+      else if (rsi > pairConfig.rsiSell && smaFast < smaSlow) signal = 'SELL';
+    }
+
     const avgVolume = volume / 24;
     const volumeRatio = avgVolume > 0 ? volume / avgVolume : 1;
-    const score = analysis.rsi ? calcScore(analysis.rsi, sentiment.value, volumeRatio) : 0;
+    const score = rsi ? calcScore(rsi, sentiment.value, volumeRatio, pairConfig.rsiBuy) : 0;
 
     logger.info(`Análise ${symbol}`, {
+      interval: pairConfig.interval,
       price: currentPrice,
-      rsi: analysis.rsi ? analysis.rsi.toFixed(2) : 'N/A',
-      signal: analysis.signal,
+      rsi: rsi ? rsi.toFixed(2) : 'N/A',
+      signal,
       score
     });
 
-    return { symbol, currentPrice, prices, analysis, score, signal: analysis.signal, rsi: analysis.rsi, smaFast: analysis.smaFast, smaSlow: analysis.smaSlow, volume };
+    return { symbol, currentPrice, analysis: { rsi, smaFast, smaSlow, signal }, score, signal, rsi, smaFast, smaSlow, volume };
   } catch (err) {
     logger.error(`Erro ao analisar ${symbol}`, { message: err.message });
     return null;
@@ -167,9 +173,10 @@ async function runCycle() {
       const pos = positions[data.symbol];
       if (!pos.inPosition) continue;
 
-      const { currentPrice, symbol, analysis } = data;
+      const { currentPrice, symbol } = data;
+      const pairConfig = PAIR_CONFIG[symbol];
 
-      // Actualizar Trailing Stop-Loss
+      // Trailing Stop-Loss
       pos.stopLoss = risk.updateTrailingStop(currentPrice, pos.stopLoss);
       savePositions();
 
@@ -195,7 +202,7 @@ async function runCycle() {
         continue;
       }
 
-      if (analysis.signal === 'SELL' && sentiment.signal === 'SELL' && news.signal === 'NEGATIVE') {
+      if (data.signal === 'SELL' && sentiment.signal === 'SELL' && news.signal === 'NEGATIVE') {
         await placeOrder(symbol, 'SELL', pos.quantity);
         const trade = recordSell(symbol, currentPrice, 'SIGNAL');
         const profit = trade ? trade.profit : 0;
@@ -216,7 +223,6 @@ async function runCycle() {
         logger.warn('Notícias negativas — compras pausadas', { score: news.sentimentScore });
         await telegram.sendMessage(telegram.formatAlert(`📰 Notícias negativas (score: ${news.sentimentScore})\nCompras pausadas neste ciclo.`));
       } else {
-        // Só analisa pares que ainda não têm posição aberta
         const pairsWithoutPosition = validAnalyses.filter(a => !positions[a.symbol].inPosition);
         const allocations = allocateCapital(pairsWithoutPosition, capitalPerPair * pairsWithoutPosition.length);
 
@@ -224,7 +230,7 @@ async function runCycle() {
           const pos = positions[alloc.symbol];
           if (pos.inPosition) continue;
 
-          // Garante que não usa mais que capitalPerPair
+          const pairConfig = PAIR_CONFIG[alloc.symbol];
           const safeAllocation = Math.min(alloc.allocation, capitalPerPair);
           const qty = risk.calculatePositionSize(safeAllocation, alloc.currentPrice, alloc.symbol);
           if (qty <= 0) continue;
@@ -232,16 +238,24 @@ async function runCycle() {
           await placeOrder(alloc.symbol, 'BUY', qty);
           pos.inPosition = true;
           pos.entryPrice = alloc.currentPrice;
-          pos.stopLoss = risk.calculateStopLoss(alloc.currentPrice);
-          pos.takeProfit = risk.calculateTakeProfit(alloc.currentPrice);
+          pos.stopLoss = alloc.currentPrice * (1 - pairConfig.stopLoss);
+          pos.takeProfit = alloc.currentPrice * (1 + pairConfig.takeProfit);
           pos.quantity = qty;
           savePositions();
 
           recordBuy(alloc.symbol, alloc.currentPrice, qty, pos.stopLoss, pos.takeProfit);
 
           const reason = getReason(alloc.score, alloc.rsi, sentiment.value);
-          await telegram.sendMessage(telegram.formatTrade('BUY', { symbol: alloc.symbol, price: alloc.currentPrice.toFixed(2), quantity: qty, stopLoss: pos.stopLoss.toFixed(2), takeProfit: pos.takeProfit.toFixed(2) }));
-          await telegram.sendMessage(telegram.formatAlert(`🟢 Compra ${alloc.symbol}\nScore: ${alloc.score}/100\nRazão: ${reason}\nNotícias: ${news.signal} (${news.sentimentScore})\nCapital: $${safeAllocation.toFixed(2)}`));
+          await telegram.sendMessage(telegram.formatTrade('BUY', {
+            symbol: alloc.symbol,
+            price: alloc.currentPrice.toFixed(2),
+            quantity: qty,
+            stopLoss: pos.stopLoss.toFixed(2),
+            takeProfit: pos.takeProfit.toFixed(2)
+          }));
+          await telegram.sendMessage(telegram.formatAlert(
+            `🟢 Compra ${alloc.symbol}\nScore: ${alloc.score}/100\nTimeframe: ${PAIR_CONFIG[alloc.symbol].interval}\nRSI Buy: ${PAIR_CONFIG[alloc.symbol].rsiBuy}\nRazão: ${reason}\nNotícias: ${news.signal}\nCapital: $${safeAllocation.toFixed(2)}`
+          ));
         }
       }
     }
@@ -278,7 +292,8 @@ async function runCycle() {
           score: validAnalyses.find(a => a.symbol === p)?.score || 0,
           rsi: validAnalyses.find(a => a.symbol === p)?.rsi?.toFixed(2) || 'N/A',
           signal: validAnalyses.find(a => a.symbol === p)?.signal || 'WAIT',
-          currentPrice: validAnalyses.find(a => a.symbol === p)?.currentPrice || 0
+          currentPrice: validAnalyses.find(a => a.symbol === p)?.currentPrice || 0,
+          interval: PAIR_CONFIG[p].interval
         }))
       });
     }
@@ -302,7 +317,8 @@ async function runCycle() {
         inPosition: positions[p].inPosition,
         score: validAnalyses.find(a => a.symbol === p)?.score || 0,
         rsi: validAnalyses.find(a => a.symbol === p)?.rsi?.toFixed(2) || 'N/A',
-        signal: validAnalyses.find(a => a.symbol === p)?.signal || 'WAIT'
+        signal: validAnalyses.find(a => a.symbol === p)?.signal || 'WAIT',
+        interval: PAIR_CONFIG[p].interval
       }))
     }));
 
@@ -315,28 +331,30 @@ async function runCycle() {
 async function start() {
   logger.info('Bot multi-par arrancado', { pairs: PAIRS });
 
-  // Carregar posições e estado anteriores
   loadPositions();
   const savedInitialBalance = loadState();
-
   const balance = await getBalance();
 
-  // Usar saldo inicial guardado ou criar novo
   if (savedInitialBalance) {
     initialBalance = savedInitialBalance;
     logger.info('Saldo inicial recuperado', { initialBalance });
   } else {
     initialBalance = balance;
     saveState(balance);
-    logger.info('Novo saldo inicial definido', { initialBalance });
   }
 
   risk.setDailyStartBalance(balance);
 
-  await telegram.sendMessage(`🚀 <b>Trading Bot Multi-Par arrancou!</b>\nA monitorizar: ${PAIRS.join(', ')} de 15 em 15 minutos.\nPosições em memória: ${PAIRS.filter(p => positions[p].inPosition).join(', ') || 'nenhuma'}`);
+  await telegram.sendMessage(`🚀 <b>Trading Bot arrancou!</b>
+Pares: ${PAIRS.join(', ')}
+BTC → 1h | RSI 35/65
+ETH → 30min | RSI 35/65
+BNB → 1h | RSI 40/60
+Stop-Loss: 2.5% | Take-Profit: 5%
+Posições em memória: ${PAIRS.filter(p => positions[p].inPosition).join(', ') || 'nenhuma'}`);
 
   runCycle();
-  setInterval(runCycle, 15 * 60 * 1000);
+  setInterval(runCycle, 30 * 60 * 1000);
 }
 
 module.exports = { start };
