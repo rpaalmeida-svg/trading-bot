@@ -62,6 +62,9 @@
     .variation-card .main-value { font-size: 1.8rem; font-weight: bold; margin-bottom: 4px; }
     .variation-card .sub-value { font-size: 1rem; font-weight: bold; }
     .variation-card .ref { font-size: 0.75rem; color: #8b949e; margin-top: 4px; }
+    .progress-bar { height: 8px; background: #21262d; border-radius: 4px; margin-top: 4px; position: relative; }
+    .progress-fill { height: 100%; border-radius: 4px; transition: width 0.5s; }
+    .progress-dot { position: absolute; top: -3px; width: 14px; height: 14px; border-radius: 50%; background: #fff; border: 2px solid; transform: translateX(-50%); transition: left 0.5s; }
   </style>
 </head>
 <body>
@@ -216,7 +219,6 @@
       document.getElementById('fg-label').textContent = data.fearGreedLabel || '—';
       if (!isNaN(fg)) document.getElementById('fg-marker').style.left = fg + '%';
 
-      // Variação do saldo
       const change = parseFloat(data.balanceChange || 0);
       const changePct = parseFloat(data.balanceChangePct || 0);
       const changeEl = document.getElementById('balance-change');
@@ -228,7 +230,6 @@
       document.getElementById('initial-balance').textContent = '$' + (data.initialBalance || '—');
       document.querySelector('.variation-card').style.borderColor = change >= 0 ? '#3fb950' : '#f85149';
 
-      // Notícias
       if (data.news) {
         const newsEmoji = data.news === 'POSITIVE' ? '📈' : data.news === 'NEGATIVE' ? '📉' : '📰';
         const newsColor = data.news === 'POSITIVE' ? '#3fb950' : data.news === 'NEGATIVE' ? '#f85149' : '#d29922';
@@ -249,7 +250,6 @@
         }
       }
 
-      // Stats
       const stats = data.stats || {};
       const pnl = stats.totalProfit || 0;
       const pnlEl = document.getElementById('pnl-total');
@@ -277,17 +277,23 @@
 
       document.getElementById('status-text').textContent = data.pairs && data.pairs.some(p => p.inPosition) ? '🔵 Posição(ões) abertas' : '🟢 Bot activo — a monitorizar';
 
-      // Pares
       if (data.pairs) {
         document.getElementById('pairs-grid').innerHTML = data.pairs.map(p => {
           let positionHTML = '';
           if (p.inPosition && p.entryPrice) {
-            const pnlPct = ((parseFloat(p.currentPrice) - parseFloat(p.entryPrice)) / parseFloat(p.entryPrice) * 100).toFixed(2);
+            const sl = parseFloat(p.stopLoss);
+            const tp = parseFloat(p.takeProfit);
+            const current = parseFloat(p.currentPrice);
+            const entry = parseFloat(p.entryPrice);
+            const pnlPct = ((current - entry) / entry * 100).toFixed(2);
             const pnlColor = parseFloat(pnlPct) >= 0 ? 'green' : 'red';
+            const progress = Math.min(100, Math.max(0, ((current - sl) / (tp - sl)) * 100));
+            const progressColor = progress > 66 ? '#3fb950' : progress > 33 ? '#d29922' : '#f85149';
+
             positionHTML = `
               <div class="pair-item">
                 <div class="plabel">Entrada</div>
-                <div class="pvalue">$${parseFloat(p.entryPrice).toFixed(2)}</div>
+                <div class="pvalue">$${entry.toFixed(2)}</div>
               </div>
               <div class="pair-item">
                 <div class="plabel">P&L Actual</div>
@@ -295,13 +301,25 @@
               </div>
               <div class="pair-item">
                 <div class="plabel">Stop-Loss</div>
-                <div class="pvalue red">$${parseFloat(p.stopLoss).toFixed(2)}</div>
+                <div class="pvalue red">$${sl.toFixed(2)}</div>
               </div>
               <div class="pair-item">
                 <div class="plabel">Take-Profit</div>
-                <div class="pvalue green">$${parseFloat(p.takeProfit).toFixed(2)}</div>
+                <div class="pvalue green">$${tp.toFixed(2)}</div>
+              </div>
+              <div class="pair-item" style="grid-column: span 2; margin-top: 8px;">
+                <div style="display:flex; justify-content:space-between; font-size:0.7rem; margin-bottom:4px;">
+                  <span style="color:#f85149;">SL $${sl.toFixed(0)}</span>
+                  <span style="color:#e6edf3; font-weight:bold;">$${current.toFixed(0)}</span>
+                  <span style="color:#3fb950;">TP $${tp.toFixed(0)}</span>
+                </div>
+                <div class="progress-bar">
+                  <div class="progress-fill" style="width:${progress}%; background:${progressColor};"></div>
+                  <div class="progress-dot" style="left:${progress}%; border-color:${progressColor};"></div>
+                </div>
               </div>`;
           }
+
           return `
             <div class="pair-card ${p.inPosition ? 'active' : ''}">
               <div class="pair-header">
@@ -335,8 +353,8 @@
       }
 
       const now = new Date().toLocaleTimeString('pt-PT');
-     const openPairs = data.pairs ? data.pairs.filter(p => p.inPosition).map(p => `${p.symbol.replace('USDT','')} ${p.entryPrice ? ((parseFloat(p.currentPrice) - parseFloat(p.entryPrice)) / parseFloat(p.entryPrice) * 100).toFixed(2) + '%' : ''}`) : [];
-logs.unshift({ time: now, msg: `BTC $${data.price} | RSI ${data.rsi} | F&G ${data.fearGreed} | ${openPairs.length > 0 ? '🔵 ' + openPairs.join(' | ') : '⚪️ Sem posições'}` });
+      const openPairs = data.pairs ? data.pairs.filter(p => p.inPosition).map(p => `${p.symbol.replace('USDT','')} ${p.entryPrice ? ((parseFloat(p.currentPrice) - parseFloat(p.entryPrice)) / parseFloat(p.entryPrice) * 100).toFixed(2) + '%' : ''}`) : [];
+      logs.unshift({ time: now, msg: `BTC $${data.price} | RSI ${data.rsi} | F&G ${data.fearGreed} | ${openPairs.length > 0 ? '🔵 ' + openPairs.join(' | ') : '⚪️ Sem posições'}` });
       if (logs.length > 50) logs.pop();
       document.getElementById('log-list').innerHTML = logs.map(l => `<li><span>${l.time}</span>${l.msg}</li>`).join('');
       document.getElementById('updated').textContent = 'Última actualização: ' + new Date().toLocaleString('pt-PT');
