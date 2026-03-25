@@ -7,6 +7,7 @@ const logger = require('./logger');
 const strategy = require('./strategy');
 const risk = require('./risk');
 const telegram = require('./telegram');
+const { getFearGreedIndex, getEmoji } = require('./sentiment');
 
 const BASE_URL = 'https://testnet.binance.vision/api';
 const API_KEY = process.env.BINANCE_API_KEY;
@@ -92,8 +93,9 @@ async function runCycle() {
     prices = await getPriceHistory();
 
     const analysis = strategy.analyzeMarket(prices);
+    const sentiment = await getFearGreedIndex();
 
-    logger.info(`Saldo: $${balance.toFixed(2)} | Preço BTC: $${currentPrice.toFixed(2)}`);
+    logger.info(`Saldo: $${balance.toFixed(2)} | Preço BTC: $${currentPrice.toFixed(2)} | Fear&Greed: ${sentiment.value} (${sentiment.classification})`);
 
     // Actualizar dashboard
     updateDashboard({
@@ -103,6 +105,9 @@ async function runCycle() {
       smaFast: analysis.smaFast ? analysis.smaFast.toFixed(2) : 'N/A',
       smaSlow: analysis.smaSlow ? analysis.smaSlow.toFixed(2) : 'N/A',
       signal: analysis.signal,
+      fearGreed: sentiment.value,
+      fearGreedLabel: sentiment.classification,
+      fearGreedEmoji: getEmoji(sentiment.value),
       inPosition,
       entryPrice: entryPrice ? entryPrice.toFixed(2) : null,
       stopLoss: stopLoss ? stopLoss.toFixed(2) : null,
@@ -116,6 +121,9 @@ async function runCycle() {
       rsi: analysis.rsi ? analysis.rsi.toFixed(2) : 'N/A',
       smaFast: analysis.smaFast ? analysis.smaFast.toFixed(2) : 'N/A',
       smaSlow: analysis.smaSlow ? analysis.smaSlow.toFixed(2) : 'N/A',
+      fearGreed: sentiment.value,
+      fearGreedLabel: sentiment.classification,
+      fearGreedEmoji: getEmoji(sentiment.value),
       inPosition,
       entryPrice: entryPrice ? entryPrice.toFixed(2) : null,
       stopLoss: stopLoss ? stopLoss.toFixed(2) : null,
@@ -128,6 +136,12 @@ async function runCycle() {
       await telegram.sendMessage(telegram.formatAlert('🛑 Limite de perda diária atingido — bot pausado!'));
       return;
     }
+
+    // Lógica de decisão combinada — técnica + sentimento
+    const techBuy = analysis.signal === 'BUY';
+    const techSell = analysis.signal === 'SELL';
+    const sentimentBuy = sentiment.signal === 'BUY' || sentiment.signal === 'NEUTRAL';
+    const sentimentSell = sentiment.signal === 'SELL';
 
     // Se estiver em posição — verificar stop-loss e take-profit
     if (inPosition) {
@@ -160,11 +174,27 @@ async function runCycle() {
         return;
       }
 
+      // Venda antecipada se sentimento muito negativo
+      if (techSell && sentimentSell) {
+        const qty = risk.calculatePositionSize(balance, currentPrice);
+        await placeOrder('SELL', qty);
+        await telegram.sendMessage(telegram.formatTrade('SELL', {
+          symbol: SYMBOL,
+          price: currentPrice.toFixed(2),
+          quantity: qty,
+          profit: (currentPrice - entryPrice).toFixed(2)
+        }));
+        await telegram.sendMessage(telegram.formatAlert(`⚠️ Venda antecipada — RSI alto + Fear&Greed: ${sentiment.value} (${sentiment.classification})`));
+        inPosition = false;
+        entryPrice = null;
+        return;
+      }
+
       return;
     }
 
-    // Analisar mercado e decidir
-    if (analysis.signal === 'BUY' && balance > 10) {
+    // Comprar apenas se técnica E sentimento concordam
+    if (techBuy && sentimentBuy && balance > 10) {
       const qty = risk.calculatePositionSize(balance, currentPrice);
       await placeOrder('BUY', qty);
       inPosition = true;
@@ -179,6 +209,8 @@ async function runCycle() {
         stopLoss: stopLoss.toFixed(2),
         takeProfit: takeProfit.toFixed(2)
       }));
+
+      await telegram.sendMessage(telegram.formatAlert(`🟢 Compra confirmada!\nRSI: ${analysis.rsi.toFixed(2)} + Fear&Greed: ${sentiment.value} (${sentiment.classification})`));
     }
 
   } catch (err) {

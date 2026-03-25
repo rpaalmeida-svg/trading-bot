@@ -27,7 +27,9 @@ function formatStatus(data) {
 📉 SMA Rápida: <b>${data.smaFast}</b>
 📉 SMA Lenta: <b>${data.smaSlow}</b>
 ─────────────────────
-${data.inPosition ? `🟢 Em posição
+${data.fearGreedEmoji} Fear &amp; Greed: <b>${data.fearGreed} — ${data.fearGreedLabel}</b>
+─────────────────────
+${data.inPosition ? `🔵 Em posição
    Entrada: $${data.entryPrice}
    Stop-Loss: $${data.stopLoss}
    Take-Profit: $${data.takeProfit}` : '⚪️ Sem posição aberta'}
