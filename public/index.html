@@ -49,7 +49,6 @@
     .badge-loss { background: #3d1010; color: #f85149; }
     .news-item { padding: 10px 0; border-bottom: 1px solid #21262d; font-size: 0.85rem; color: #8b949e; display: flex; align-items: flex-start; gap: 8px; }
     .news-item:last-child { border-bottom: none; }
-    .news-signal-badge { padding: 3px 10px; border-radius: 6px; font-size: 0.75rem; font-weight: bold; white-space: nowrap; }
     .log-box { background: #161b22; border: 1px solid #30363d; border-radius: 12px; padding: 20px; }
     .log-box h2 { color: #58a6ff; margin-bottom: 16px; font-size: 0.9rem; text-transform: uppercase; letter-spacing: 1px; }
     #log-list { list-style: none; max-height: 200px; overflow-y: auto; }
@@ -58,6 +57,11 @@
     #updated { text-align: center; color: #8b949e; font-size: 0.8rem; margin-top: 20px; }
     .logout { position: fixed; top: 16px; right: 20px; font-size: 0.8rem; color: #8b949e; text-decoration: none; background: #161b22; border: 1px solid #30363d; padding: 6px 14px; border-radius: 8px; }
     .logout:hover { color: #f85149; border-color: #f85149; }
+    .variation-card { background: #161b22; border: 2px solid #30363d; border-radius: 12px; padding: 16px; text-align: center; grid-column: span 2; }
+    .variation-card .label { font-size: 0.75rem; color: #8b949e; margin-bottom: 6px; text-transform: uppercase; letter-spacing: 1px; }
+    .variation-card .main-value { font-size: 1.8rem; font-weight: bold; margin-bottom: 4px; }
+    .variation-card .sub-value { font-size: 1rem; font-weight: bold; }
+    .variation-card .ref { font-size: 0.75rem; color: #8b949e; margin-top: 4px; }
   </style>
 </head>
 <body>
@@ -104,6 +108,12 @@
     <div class="card">
       <div class="label">Trades</div>
       <div class="value" id="total-trades">—</div>
+    </div>
+    <div class="variation-card">
+      <div class="label">Variação desde o início</div>
+      <div class="main-value" id="balance-change">—</div>
+      <div class="sub-value" id="balance-change-pct">—</div>
+      <div class="ref">Saldo inicial: <span id="initial-balance">—</span></div>
     </div>
   </div>
 
@@ -204,6 +214,21 @@
       document.getElementById('fg-label').textContent = data.fearGreedLabel || '—';
       document.getElementById('fg-marker').style.left = fg + '%';
 
+      // Variação do saldo
+      const change = parseFloat(data.balanceChange || 0);
+      const changePct = parseFloat(data.balanceChangePct || 0);
+      const changeEl = document.getElementById('balance-change');
+      const changePctEl = document.getElementById('balance-change-pct');
+      changeEl.textContent = (change >= 0 ? '+' : '') + '$' + parseFloat(change).toFixed(2);
+      changeEl.style.color = change >= 0 ? '#3fb950' : '#f85149';
+      changePctEl.textContent = (changePct >= 0 ? '+' : '') + changePct + '%';
+      changePctEl.style.color = changePct >= 0 ? '#3fb950' : '#f85149';
+      document.getElementById('initial-balance').textContent = '$' + (data.initialBalance || '—');
+
+      // Borda do card de variação
+      const varCard = document.querySelector('.variation-card');
+      varCard.style.borderColor = change >= 0 ? '#3fb950' : '#f85149';
+
       // Notícias
       if (data.news) {
         const newsEmoji = data.news === 'POSITIVE' ? '📈' : data.news === 'NEGATIVE' ? '📉' : '📰';
@@ -301,7 +326,7 @@
       }
 
       const now = new Date().toLocaleTimeString('pt-PT');
-      logs.unshift({ time: now, msg: `BTC $${data.price} | RSI ${data.rsi} | F&G ${data.fearGreed} | Notícias ${data.news || '—'} | P&L ${data.stats ? (data.stats.totalProfit >= 0 ? '+' : '') + '$' + data.stats.totalProfit : '—'}` });
+      logs.unshift({ time: now, msg: `BTC $${data.price} | RSI ${data.rsi} | F&G ${data.fearGreed} | Notícias ${data.news || '—'} | Variação ${(parseFloat(data.balanceChange) >= 0 ? '+' : '')}$${parseFloat(data.balanceChange || 0).toFixed(2)}` });
       if (logs.length > 50) logs.pop();
       document.getElementById('log-list').innerHTML = logs.map(l => `<li><span>${l.time}</span>${l.msg}</li>`).join('');
       document.getElementById('updated').textContent = 'Última actualização: ' + new Date().toLocaleString('pt-PT');

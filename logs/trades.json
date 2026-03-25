@@ -78,5 +78,21 @@
     "closePrice": null,
     "closeTimestamp": null,
     "closeReason": null
+  },
+  {
+    "id": 1774453679405,
+    "symbol": "SOLUSDT",
+    "side": "BUY",
+    "price": 91.65,
+    "quantity": 3.45,
+    "stopLoss": 90.27525,
+    "takeProfit": 94.3995,
+    "timestamp": "2026-03-25T15:47:59.405Z",
+    "closed": false,
+    "profit": null,
+    "profitPercent": null,
+    "closePrice": null,
+    "closeTimestamp": null,
+    "closeReason": null
   }
 ]

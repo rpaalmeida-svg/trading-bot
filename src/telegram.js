@@ -26,10 +26,15 @@ ${p.signal === 'BUY' ? '🟢' : p.signal === 'SELL' ? '🔴' : '⚪️'} <b>${p.
     ? '\n' + data.newsTitles.map(t => `• ${t.substring(0, 60)}...`).join('\n')
     : '';
 
+  const change = parseFloat(data.balanceChange || 0);
+  const changePct = parseFloat(data.balanceChangePct || 0);
+  const changeEmoji = change >= 0 ? '📈' : '📉';
+
   return `
 🤖 <b>Trading Bot — Ponto de Situação</b>
 ─────────────────────
 💰 Saldo: <b>$${data.balance}</b>
+${changeEmoji} Variação: <b>${change >= 0 ? '+' : ''}$${change} (${changePct}%)</b>
 ${data.fearGreedEmoji} Fear &amp; Greed: <b>${data.fearGreed} — ${data.fearGreedLabel}</b>
 ${newsEmoji} Notícias: <b>${data.news}</b> (score: ${data.newsScore})${newsTitlesText}
 ─────────────────────
