@@ -234,3 +234,5 @@
 {"timestamp":"2026-03-25T16:18:56.242Z","type":"ERROR","message":"Erro no ciclo","data":{"message":"Request failed with status code 400"}}
 {"timestamp":"2026-03-25T16:22:36.777Z","type":"INFO","message":"Bot multi-par arrancado","data":{"pairs":["BTCUSDT","ETHUSDT","BNBUSDT"]}}
 {"timestamp":"2026-03-25T16:25:49.669Z","type":"INFO","message":"Bot multi-par arrancado","data":{"pairs":["BTCUSDT","ETHUSDT","BNBUSDT"]}}
+{"timestamp":"2026-03-25T16:48:53.964Z","type":"ERROR","message":"Erro no ciclo","data":{"message":"Request failed with status code 401"}}
+{"timestamp":"2026-03-25T17:18:54.018Z","type":"ERROR","message":"Erro no ciclo","data":{"message":"Request failed with status code 401"}}
