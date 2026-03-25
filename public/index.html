@@ -309,14 +309,24 @@
                 <div class="pvalue ${p.inPosition ? 'green' : ''}">${p.inPosition ? '🔵 Em posição' : '⚪️ Aguardar'}</div>
               </div>
               ${p.inPosition ? `
-              <div class="pair-item">
-                <div class="plabel">Stop-Loss</div>
-                <div class="pvalue red">$${parseFloat(p.stopLoss).toFixed(2)}</div>
-              </div>
-              <div class="pair-item">
-                <div class="plabel">Take-Profit</div>
-                <div class="pvalue green">$${parseFloat(p.takeProfit).toFixed(2)}</div>
-              </div>` : ''}
+<div class="pair-item">
+  <div class="plabel">Entrada</div>
+  <div class="pvalue">$${parseFloat(p.entryPrice).toFixed(2)}</div>
+</div>
+<div class="pair-item">
+  <div class="plabel">P&L Actual</div>
+  <div class="pvalue ${parseFloat(p.currentPrice) >= parseFloat(p.entryPrice) ? 'green' : 'red'}">
+    ${((parseFloat(p.currentPrice) - parseFloat(p.entryPrice)) / parseFloat(p.entryPrice) * 100).toFixed(2)}%
+  </div>
+</div>
+<div class="pair-item">
+  <div class="plabel">Stop-Loss</div>
+  <div class="pvalue red">$${parseFloat(p.stopLoss).toFixed(2)}</div>
+</div>
+<div class="pair-item">
+  <div class="plabel">Take-Profit</div>
+  <div class="pvalue green">$${parseFloat(p.takeProfit).toFixed(2)}</div>
+</div>` : ''}
             </div>
             <div class="score-bar">
               <div class="score-fill" style="width:${p.score}%;background:${scoreColor(p.score)}"></div>
