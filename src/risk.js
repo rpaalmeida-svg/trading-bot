@@ -1,15 +1,15 @@
 const logger = require('./logger');
 
 const RISK_CONFIG = {
-  maxPositionSize: 0.95,      // Usa no máximo 95% do saldo disponível
-  stopLossPercent: 0.015,     // Corta perda se cair 1.5%
-  takeProfitPercent: 0.03,    // Fecha lucro ao atingir 3%
-  maxDailyLoss: 0.05,         // Para o bot se perder 5% no dia
-  maxOpenTrades: 1,           // Só 1 trade aberto de cada vez (começo seguro)
+  maxPositionSize: 0.95,
+  stopLossPercent: 0.015,
+  takeProfitPercent: 0.03,
+  trailingStopPercent: 0.012,
+  maxDailyLoss: 0.05,
+  maxOpenTrades: 3,
 };
 
 let dailyStartBalance = null;
-let currentDailyLoss = 0;
 
 function setDailyStartBalance(balance) {
   dailyStartBalance = balance;
@@ -18,18 +18,15 @@ function setDailyStartBalance(balance) {
 
 function checkDailyLoss(currentBalance) {
   if (!dailyStartBalance) return false;
-  
   const loss = (dailyStartBalance - currentBalance) / dailyStartBalance;
-  
   if (loss >= RISK_CONFIG.maxDailyLoss) {
     logger.warn('LIMITE DE PERDA DIÁRIA ATINGIDO — bot pausado', {
       dailyStartBalance,
       currentBalance,
       lossPercent: (loss * 100).toFixed(2) + '%'
     });
-    return true; // true = parar o bot
+    return true;
   }
-  
   return false;
 }
 
@@ -41,9 +38,24 @@ function calculateTakeProfit(entryPrice) {
   return entryPrice * (1 + RISK_CONFIG.takeProfitPercent);
 }
 
+// Trailing Stop-Loss — sobe com o preço, nunca desce
+function updateTrailingStop(currentPrice, currentStopLoss) {
+  const newStop = currentPrice * (1 - RISK_CONFIG.trailingStopPercent);
+  if (newStop > currentStopLoss) {
+    logger.info('Trailing Stop-Loss actualizado', {
+      oldStop: currentStopLoss.toFixed(2),
+      newStop: newStop.toFixed(2),
+      currentPrice: currentPrice.toFixed(2)
+    });
+    return newStop;
+  }
+  return currentStopLoss;
+}
+
 function calculatePositionSize(balance, price, symbol = '') {
   const maxCapital = parseFloat(process.env.MAX_CAPITAL) || balance;
-  const available = Math.min(balance, maxCapital) * RISK_CONFIG.maxPositionSize;
+  const capitalPerPair = maxCapital / 3; // divide pelos 3 pares
+  const available = Math.min(balance, capitalPerPair) * RISK_CONFIG.maxPositionSize;
   const quantity = available / price;
 
   let result;
@@ -52,7 +64,6 @@ function calculatePositionSize(balance, price, symbol = '') {
   else if (symbol.includes('SOL')) result = Math.floor(quantity * 100) / 100;
   else result = Math.floor(quantity * 1000) / 1000;
 
-  // Quantidades mínimas Binance
   if (symbol.includes('BTC') && result < 0.00001) return 0;
   if (symbol.includes('ETH') && result < 0.0001) return 0;
   if (symbol.includes('SOL') && result < 0.01) return 0;
@@ -66,5 +77,6 @@ module.exports = {
   checkDailyLoss,
   calculateStopLoss,
   calculateTakeProfit,
+  updateTrailingStop,
   calculatePositionSize,
 };

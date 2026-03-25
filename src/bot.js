@@ -126,6 +126,9 @@ async function runCycle() {
 
       const { currentPrice, symbol, analysis } = data;
 
+      // Actualizar Trailing Stop-Loss
+      pos.stopLoss = risk.updateTrailingStop(currentPrice, pos.stopLoss);
+
       if (currentPrice <= pos.stopLoss) {
         await placeOrder(symbol, 'SELL', pos.quantity);
         const trade = recordSell(symbol, currentPrice, 'STOP_LOSS');
@@ -219,22 +222,22 @@ async function runCycle() {
     }
 
     await telegram.sendMessage(telegram.formatStatus({
-  balance: balance.toFixed(2),
-  fearGreed: sentiment.value,
-  fearGreedLabel: sentiment.classification,
-  fearGreedEmoji: getEmoji(sentiment.value),
-  inPosition: openCount > 0,
-  totalProfit: stats.totalProfit,
-  winRate: stats.winRate,
-  totalTrades: stats.totalTrades,
-  pairs: PAIRS.map(p => ({
-    symbol: p,
-    inPosition: positions[p].inPosition,
-    score: validAnalyses.find(a => a.symbol === p)?.score || 0,
-    rsi: validAnalyses.find(a => a.symbol === p)?.rsi?.toFixed(2) || 'N/A',
-    signal: validAnalyses.find(a => a.symbol === p)?.signal || 'WAIT'
-  }))
-}));
+      balance: balance.toFixed(2),
+      fearGreed: sentiment.value,
+      fearGreedLabel: sentiment.classification,
+      fearGreedEmoji: getEmoji(sentiment.value),
+      inPosition: openCount > 0,
+      totalProfit: stats.totalProfit,
+      winRate: stats.winRate,
+      totalTrades: stats.totalTrades,
+      pairs: PAIRS.map(p => ({
+        symbol: p,
+        inPosition: positions[p].inPosition,
+        score: validAnalyses.find(a => a.symbol === p)?.score || 0,
+        rsi: validAnalyses.find(a => a.symbol === p)?.rsi?.toFixed(2) || 'N/A',
+        signal: validAnalyses.find(a => a.symbol === p)?.signal || 'WAIT'
+      }))
+    }));
 
   } catch (err) {
     logger.error('Erro no ciclo', { message: err.message });

@@ -168,3 +168,4 @@
 {"timestamp":"2026-03-25T15:06:00.381Z","type":"INFO","message":"Análise SOLUSDT","data":{"price":91.99,"rsi":"30.55","signal":"WAIT","score":100}}
 {"timestamp":"2026-03-25T15:06:00.627Z","type":"TRADE","message":"Ordem executada: BUY BTCUSDT","data":{"symbol":"BTCUSDT","quantity":0.013,"orderId":23399752}}
 {"timestamp":"2026-03-25T15:06:01.608Z","type":"TRADE","message":"Ordem executada: BUY SOLUSDT","data":{"symbol":"SOLUSDT","quantity":10.327,"orderId":3788528}}
+{"timestamp":"2026-03-25T15:17:44.589Z","type":"INFO","message":"Bot multi-par arrancado","data":{"pairs":["BTCUSDT","ETHUSDT","SOLUSDT"]}}
