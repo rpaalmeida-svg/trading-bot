@@ -2,6 +2,7 @@ const axios = require('axios');
 const crypto = require('crypto');
 require('dotenv').config();
 
+const { updateDashboard } = require('./dashboard');
 const logger = require('./logger');
 const strategy = require('./strategy');
 const risk = require('./risk');
@@ -93,6 +94,20 @@ async function runCycle() {
     const analysis = strategy.analyzeMarket(prices);
 
     logger.info(`Saldo: $${balance.toFixed(2)} | Preço BTC: $${currentPrice.toFixed(2)}`);
+
+    // Actualizar dashboard
+    updateDashboard({
+      balance: balance.toFixed(2),
+      price: currentPrice.toFixed(2),
+      rsi: analysis.rsi ? analysis.rsi.toFixed(2) : 'N/A',
+      smaFast: analysis.smaFast ? analysis.smaFast.toFixed(2) : 'N/A',
+      smaSlow: analysis.smaSlow ? analysis.smaSlow.toFixed(2) : 'N/A',
+      signal: analysis.signal,
+      inPosition,
+      entryPrice: entryPrice ? entryPrice.toFixed(2) : null,
+      stopLoss: stopLoss ? stopLoss.toFixed(2) : null,
+      takeProfit: takeProfit ? takeProfit.toFixed(2) : null,
+    });
 
     // Enviar ponto de situação ao Telegram
     await telegram.sendMessage(telegram.formatStatus({

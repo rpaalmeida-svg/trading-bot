@@ -1,0 +1,279 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Trading Bot — Dashboard</title>
+  <script src="/socket.io/socket.io.js"></script>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      background: #0d1117;
+      color: #e6edf3;
+      font-family: 'Segoe UI', sans-serif;
+      padding: 20px;
+    }
+    h1 {
+      text-align: center;
+      color: #58a6ff;
+      margin-bottom: 30px;
+      font-size: 1.8rem;
+    }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 16px;
+      margin-bottom: 30px;
+    }
+    .card {
+      background: #161b22;
+      border: 1px solid #30363d;
+      border-radius: 12px;
+      padding: 20px;
+      text-align: center;
+    }
+    .card .label {
+      font-size: 0.8rem;
+      color: #8b949e;
+      margin-bottom: 8px;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+    }
+    .card .value {
+      font-size: 1.6rem;
+      font-weight: bold;
+      color: #58a6ff;
+    }
+    .card .value.green { color: #3fb950; }
+    .card .value.red { color: #f85149; }
+    .card .value.yellow { color: #d29922; }
+    .status-bar {
+      background: #161b22;
+      border: 1px solid #30363d;
+      border-radius: 12px;
+      padding: 20px;
+      margin-bottom: 30px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .dot {
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      background: #3fb950;
+      animation: pulse 2s infinite;
+    }
+    .dot.waiting { background: #d29922; }
+    .dot.position { background: #58a6ff; }
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.4; }
+    }
+    .position-box {
+      background: #161b22;
+      border: 1px solid #30363d;
+      border-radius: 12px;
+      padding: 20px;
+      margin-bottom: 30px;
+    }
+    .position-box h2 {
+      color: #58a6ff;
+      margin-bottom: 16px;
+      font-size: 1rem;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+    }
+    .position-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+      gap: 12px;
+    }
+    .position-item .plabel {
+      font-size: 0.75rem;
+      color: #8b949e;
+      margin-bottom: 4px;
+    }
+    .position-item .pvalue {
+      font-size: 1.1rem;
+      font-weight: bold;
+      color: #e6edf3;
+    }
+    .log-box {
+      background: #161b22;
+      border: 1px solid #30363d;
+      border-radius: 12px;
+      padding: 20px;
+    }
+    .log-box h2 {
+      color: #58a6ff;
+      margin-bottom: 16px;
+      font-size: 1rem;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+    }
+    #log-list {
+      list-style: none;
+      max-height: 300px;
+      overflow-y: auto;
+    }
+    #log-list li {
+      padding: 8px 0;
+      border-bottom: 1px solid #21262d;
+      font-size: 0.85rem;
+      color: #8b949e;
+    }
+    #log-list li span {
+      color: #58a6ff;
+      margin-right: 8px;
+    }
+    #log-list li.trade { color: #3fb950; }
+    #log-list li.warn { color: #f85149; }
+    #updated {
+      text-align: center;
+      color: #8b949e;
+      font-size: 0.8rem;
+      margin-top: 20px;
+    }
+  </style>
+</head>
+<body>
+
+  <h1>🤖 Trading Bot — Dashboard</h1>
+
+  <div class="status-bar">
+    <div class="dot" id="status-dot"></div>
+    <span id="status-text">A aguardar dados...</span>
+  </div>
+
+  <div class="grid">
+    <div class="card">
+      <div class="label">Saldo Disponível</div>
+      <div class="value green" id="balance">—</div>
+    </div>
+    <div class="card">
+      <div class="label">Preço BTC/USDT</div>
+      <div class="value" id="price">—</div>
+    </div>
+    <div class="card">
+      <div class="label">RSI (14)</div>
+      <div class="value" id="rsi">—</div>
+    </div>
+    <div class="card">
+      <div class="label">SMA Rápida (9)</div>
+      <div class="value yellow" id="smaFast">—</div>
+    </div>
+    <div class="card">
+      <div class="label">SMA Lenta (21)</div>
+      <div class="value yellow" id="smaSlow">—</div>
+    </div>
+    <div class="card">
+      <div class="label">Sinal Actual</div>
+      <div class="value" id="signal">—</div>
+    </div>
+  </div>
+
+  <div class="position-box" id="position-box">
+    <h2>📊 Posição Actual</h2>
+    <div id="no-position" style="color:#8b949e">Sem posição aberta</div>
+    <div class="position-grid" id="position-grid" style="display:none">
+      <div class="position-item">
+        <div class="plabel">Preço de Entrada</div>
+        <div class="pvalue" id="entryPrice">—</div>
+      </div>
+      <div class="position-item">
+        <div class="plabel">Stop-Loss</div>
+        <div class="pvalue red" id="stopLoss">—</div>
+      </div>
+      <div class="position-item">
+        <div class="plabel">Take-Profit</div>
+        <div class="pvalue green" id="takeProfit">—</div>
+      </div>
+      <div class="position-item">
+        <div class="plabel">P&L Actual</div>
+        <div class="pvalue" id="pnl">—</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="log-box">
+    <h2>📋 Últimos Eventos</h2>
+    <ul id="log-list"></ul>
+  </div>
+
+  <div id="updated"></div>
+
+  <script>
+    const socket = io();
+    const logs = [];
+
+    socket.on('update', (data) => {
+      // Saldo
+      document.getElementById('balance').textContent = '$' + data.balance;
+
+      // Preço
+      document.getElementById('price').textContent = '$' + data.price;
+
+      // RSI com cor
+      const rsiEl = document.getElementById('rsi');
+      rsiEl.textContent = data.rsi;
+      rsiEl.className = 'value';
+      if (parseFloat(data.rsi) < 35) rsiEl.classList.add('green');
+      else if (parseFloat(data.rsi) > 65) rsiEl.classList.add('red');
+      else rsiEl.classList.add('yellow');
+
+      // SMAs
+      document.getElementById('smaFast').textContent = '$' + data.smaFast;
+      document.getElementById('smaSlow').textContent = '$' + data.smaSlow;
+
+      // Sinal
+      const signalEl = document.getElementById('signal');
+      signalEl.textContent = data.signal || 'WAIT';
+      signalEl.className = 'value';
+      if (data.signal === 'BUY') signalEl.classList.add('green');
+      else if (data.signal === 'SELL') signalEl.classList.add('red');
+      else signalEl.classList.add('yellow');
+
+      // Status bar
+      const dot = document.getElementById('status-dot');
+      const statusText = document.getElementById('status-text');
+      dot.className = 'dot';
+      if (data.inPosition) {
+        dot.classList.add('position');
+        statusText.textContent = '🔵 Em posição aberta';
+      } else {
+        statusText.textContent = '🟢 Bot activo — a monitorizar';
+      }
+
+      // Posição
+      if (data.inPosition) {
+        document.getElementById('no-position').style.display = 'none';
+        document.getElementById('position-grid').style.display = 'grid';
+        document.getElementById('entryPrice').textContent = '$' + data.entryPrice;
+        document.getElementById('stopLoss').textContent = '$' + data.stopLoss;
+        document.getElementById('takeProfit').textContent = '$' + data.takeProfit;
+
+        const pnl = ((parseFloat(data.price) - parseFloat(data.entryPrice)) / parseFloat(data.entryPrice) * 100).toFixed(2);
+        const pnlEl = document.getElementById('pnl');
+        pnlEl.textContent = pnl + '%';
+        pnlEl.className = 'pvalue ' + (pnl >= 0 ? 'green' : 'red');
+      } else {
+        document.getElementById('no-position').style.display = 'block';
+        document.getElementById('position-grid').style.display = 'none';
+      }
+
+      // Log
+      const now = new Date().toLocaleTimeString('pt-PT');
+      logs.unshift({ time: now, msg: `BTC $${data.price} | RSI ${data.rsi} | ${data.signal || 'WAIT'}` });
+      if (logs.length > 50) logs.pop();
+
+      const logList = document.getElementById('log-list');
+      logList.innerHTML = logs.map(l => `<li><span>${l.time}</span>${l.msg}</li>`).join('');
+
+      // Timestamp
+      document.getElementById('updated').textContent = 'Última actualização: ' + new Date().toLocaleString('pt-PT');
+    });
+  </script>
+
+</body>
+</html>
