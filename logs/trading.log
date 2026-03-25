@@ -255,3 +255,16 @@
 {"timestamp":"2026-03-25T18:17:13.734Z","type":"INFO","message":"Análise ETHUSDT","data":{"interval":"30m","price":2170.3,"rsi":"37.16","signal":"WAIT","score":88}}
 {"timestamp":"2026-03-25T18:17:13.986Z","type":"ERROR","message":"Erro ao executar ordem BUY ETHUSDT","data":{"quantity":0.1459,"detail":{"code":-2010,"msg":"Account has insufficient balance for requested action."}}}
 {"timestamp":"2026-03-25T18:17:13.987Z","type":"ERROR","message":"Erro ao comprar ETHUSDT","data":{"message":"Request failed with status code 400"}}
+{"timestamp":"2026-03-25T18:30:18.180Z","type":"INFO","message":"Bot multi-par arrancado","data":{"pairs":["BTCUSDT","ETHUSDT","BNBUSDT"]}}
+{"timestamp":"2026-03-25T18:31:23.353Z","type":"INFO","message":"Bot multi-par arrancado","data":{"pairs":["BTCUSDT","ETHUSDT","BNBUSDT"]}}
+{"timestamp":"2026-03-25T18:31:24.112Z","type":"INFO","message":"Saldo obtido com sucesso","data":{"balance":114.6021923}}
+{"timestamp":"2026-03-25T18:31:24.113Z","type":"INFO","message":"Saldo inicial recuperado","data":{"initialBalance":285.3170693}}
+{"timestamp":"2026-03-25T18:31:24.113Z","type":"INFO","message":"Saldo inicial do dia definido","data":{"balance":114.6021923}}
+{"timestamp":"2026-03-25T18:31:24.938Z","type":"INFO","message":"Fear & Greed Index","data":{"value":14,"classification":"Extreme Fear"}}
+{"timestamp":"2026-03-25T18:31:25.063Z","type":"INFO","message":"Sem notícias disponíveis","data":null}
+{"timestamp":"2026-03-25T18:31:25.063Z","type":"INFO","message":"Ciclo iniciado","data":{"balance":"114.60","fearGreed":14,"newsSignal":"NEUTRAL"}}
+{"timestamp":"2026-03-25T18:31:25.808Z","type":"INFO","message":"Análise BTCUSDT","data":{"interval":"1h","price":70942.79,"rsi":"49.69","signal":"WAIT","score":76}}
+{"timestamp":"2026-03-25T18:31:25.822Z","type":"INFO","message":"Análise BNBUSDT","data":{"interval":"1h","price":645.92,"rsi":"57.24","signal":"WAIT","score":76}}
+{"timestamp":"2026-03-25T18:31:25.824Z","type":"INFO","message":"Análise ETHUSDT","data":{"interval":"30m","price":2168.86,"rsi":"39.71","signal":"WAIT","score":88}}
+{"timestamp":"2026-03-25T18:31:26.077Z","type":"ERROR","message":"Erro ao executar ordem BUY ETHUSDT","data":{"quantity":0.146,"detail":{"code":-2010,"msg":"Account has insufficient balance for requested action."}}}
+{"timestamp":"2026-03-25T18:31:26.078Z","type":"ERROR","message":"Erro ao comprar ETHUSDT","data":{"message":"Request failed with status code 400"}}
