@@ -1,7 +1,5 @@
 const axios = require('axios');
 const crypto = require('crypto');
-const fs = require('fs');
-const path = require('path');
 require('dotenv').config();
 
 const { updateDashboard } = require('./dashboard');
@@ -13,12 +11,11 @@ const { getFearGreedIndex, getEmoji } = require('./sentiment');
 const { PAIRS, PAIR_CONFIG, calcScore, allocateCapital, getReason } = require('./portfolio');
 const { recordBuy, recordSell, getStats } = require('./history');
 const { getNewsSentiment } = require('./news');
+const { initDB, saveState, loadState } = require('./database');
 
 const BASE_URL = 'https://testnet.binance.vision/api';
 const API_KEY = process.env.BINANCE_API_KEY;
 const SECRET_KEY = process.env.BINANCE_SECRET_KEY;
-const POSITIONS_FILE = path.join(__dirname, '../logs/positions.json');
-const STATE_FILE = path.join(__dirname, '../logs/state.json');
 
 let initialBalance = null;
 
@@ -33,38 +30,20 @@ PAIRS.forEach(p => {
   };
 });
 
-function savePositions() {
-  fs.writeFileSync(POSITIONS_FILE, JSON.stringify(positions, null, 2));
+async function persistPositions() {
+  await saveState('positions', positions);
 }
 
-function loadPositions() {
-  try {
-    if (fs.existsSync(POSITIONS_FILE)) {
-      const data = JSON.parse(fs.readFileSync(POSITIONS_FILE, 'utf8'));
-      PAIRS.forEach(p => {
-        if (data[p]) positions[p] = data[p];
-      });
-      logger.info('Posições carregadas', { positions });
-    }
-  } catch (err) {
-    logger.error('Erro ao carregar posições', { message: err.message });
+async function restorePositions() {
+  const saved = await loadState('positions');
+  if (saved) {
+    PAIRS.forEach(p => {
+      if (saved[p]) positions[p] = saved[p];
+    });
+    logger.info('Posições restauradas da BD', {
+      emPosicao: PAIRS.filter(p => positions[p].inPosition)
+    });
   }
-}
-
-function saveState(balance) {
-  fs.writeFileSync(STATE_FILE, JSON.stringify({ initialBalance: balance }, null, 2));
-}
-
-function loadState() {
-  try {
-    if (fs.existsSync(STATE_FILE)) {
-      const data = JSON.parse(fs.readFileSync(STATE_FILE, 'utf8'));
-      return data.initialBalance || null;
-    }
-  } catch (err) {
-    logger.error('Erro ao carregar estado', { message: err.message });
-  }
-  return null;
 }
 
 function sign(queryString) {
@@ -221,7 +200,6 @@ async function runCycle() {
     const analyses = await Promise.all(PAIRS.map(symbol => analyzePair(symbol, sentiment)));
     validAnalyses = analyses.filter(a => a !== null);
 
-    // Actualizar dashboard logo após análise — mesmo antes de comprar/vender
     sendDashboardUpdate(balance, validAnalyses, sentiment, news, getStats());
 
     // Gerir posições abertas
@@ -232,7 +210,7 @@ async function runCycle() {
       const { currentPrice, symbol } = data;
 
       pos.stopLoss = risk.updateTrailingStop(currentPrice, pos.stopLoss);
-      savePositions();
+      await persistPositions();
 
       if (currentPrice <= pos.stopLoss) {
         try {
@@ -243,7 +221,7 @@ async function runCycle() {
           await telegram.sendMessage(telegram.formatAlert(`🛑 Stop-Loss activado em ${symbol}!\nResultado: ${profit >= 0 ? '+' : ''}$${profit.toFixed(2)}`));
         } catch (e) { logger.error(`Erro venda stop-loss ${symbol}`, { message: e.message }); }
         pos.inPosition = false; pos.entryPrice = null; pos.quantity = null;
-        savePositions();
+        await persistPositions();
         continue;
       }
 
@@ -256,7 +234,7 @@ async function runCycle() {
           await telegram.sendMessage(telegram.formatAlert(`🎯 Take-Profit atingido em ${symbol}!\nResultado: +$${profit.toFixed(2)}`));
         } catch (e) { logger.error(`Erro venda take-profit ${symbol}`, { message: e.message }); }
         pos.inPosition = false; pos.entryPrice = null; pos.quantity = null;
-        savePositions();
+        await persistPositions();
         continue;
       }
 
@@ -269,7 +247,7 @@ async function runCycle() {
           await telegram.sendMessage(telegram.formatAlert(`⚠️ Venda antecipada em ${symbol}\nResultado: ${profit >= 0 ? '+' : ''}$${profit.toFixed(2)}`));
         } catch (e) { logger.error(`Erro venda signal ${symbol}`, { message: e.message }); }
         pos.inPosition = false; pos.entryPrice = null; pos.quantity = null;
-        savePositions();
+        await persistPositions();
       }
     }
 
@@ -295,16 +273,10 @@ async function runCycle() {
           const pairConfig = PAIR_CONFIG[alloc.symbol];
           const safeAllocation = Math.min(alloc.allocation, capitalPerPair);
 
-          if (safeAllocation < 10) {
-            logger.warn(`Capital insuficiente para ${alloc.symbol}`, { safeAllocation });
-            continue;
-          }
+          if (safeAllocation < 10) continue;
 
           const qty = risk.calculatePositionSize(safeAllocation, alloc.currentPrice, alloc.symbol);
-          if (qty <= 0) {
-            logger.warn(`Quantidade inválida para ${alloc.symbol}`, { qty, safeAllocation, price: alloc.currentPrice });
-            continue;
-          }
+          if (qty <= 0) continue;
 
           try {
             await placeOrder(alloc.symbol, 'BUY', qty);
@@ -313,7 +285,7 @@ async function runCycle() {
             pos.stopLoss = alloc.currentPrice * (1 - pairConfig.stopLoss);
             pos.takeProfit = alloc.currentPrice * (1 + pairConfig.takeProfit);
             pos.quantity = qty;
-            savePositions();
+            await persistPositions();
 
             recordBuy(alloc.symbol, alloc.currentPrice, qty, pos.stopLoss, pos.takeProfit);
 
@@ -335,7 +307,6 @@ async function runCycle() {
       }
     }
 
-    // Actualizar dashboard final com posições actualizadas
     sendDashboardUpdate(balance, validAnalyses, sentiment, news, getStats());
 
     const stats = getStats();
@@ -369,7 +340,6 @@ async function runCycle() {
   } catch (err) {
     logger.error('Erro no ciclo', { message: err.message });
     await telegram.sendMessage(telegram.formatAlert(`Erro no bot: ${err.message}`));
-    // Mesmo com erro — actualizar dashboard com o que temos
     if (balance > 0) {
       sendDashboardUpdate(balance, validAnalyses, sentiment, news, getStats());
     }
@@ -379,26 +349,28 @@ async function runCycle() {
 async function start() {
   logger.info('Bot multi-par arrancado', { pairs: PAIRS });
 
-  loadPositions();
-  const savedInitialBalance = loadState();
-  let balance;
-try {
-  balance = await getBalance();
-  logger.info('Saldo obtido com sucesso', { balance });
-} catch (err) {
-  logger.error('Erro ao obter saldo inicial', { 
-    message: err.message,
-    detail: err.response?.data 
-  });
-  throw err;
-}
+  await initDB();
+  await restorePositions();
 
-  if (savedInitialBalance) {
-    initialBalance = savedInitialBalance;
+  const savedBalance = await loadState('initialBalance');
+  let balance;
+  try {
+    balance = await getBalance();
+    logger.info('Saldo obtido com sucesso', { balance });
+  } catch (err) {
+    logger.error('Erro ao obter saldo inicial', {
+      message: err.message,
+      detail: err.response?.data
+    });
+    throw err;
+  }
+
+  if (savedBalance) {
+    initialBalance = savedBalance;
     logger.info('Saldo inicial recuperado', { initialBalance });
   } else {
     initialBalance = balance;
-    saveState(balance);
+    await saveState('initialBalance', balance);
   }
 
   risk.setDailyStartBalance(balance);
