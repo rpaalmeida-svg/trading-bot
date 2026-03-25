@@ -18,21 +18,21 @@ async function sendMessage(message) {
 }
 
 function formatStatus(data) {
+  const pairsInfo = data.pairs ? data.pairs.map(p => `
+${p.signal === 'BUY' ? '🟢' : p.signal === 'SELL' ? '🔴' : '⚪️'} <b>${p.symbol.replace('USDT', '/USDT')}</b> — RSI: ${p.rsi} | Score: ${p.score}/100 | ${p.inPosition ? '🔵 Em posição' : 'Aguardar'}`).join('') : '';
+
   return `
 🤖 <b>Trading Bot — Ponto de Situação</b>
 ─────────────────────
 💰 Saldo: <b>$${data.balance}</b>
-📊 BTC/USDT: <b>$${data.price}</b>
-📈 RSI: <b>${data.rsi}</b>
-─────────────────────
 ${data.fearGreedEmoji} Fear &amp; Greed: <b>${data.fearGreed} — ${data.fearGreedLabel}</b>
 ─────────────────────
-📊 <b>Performance</b>
+📊 <b>Pares</b>${pairsInfo}
+─────────────────────
+📈 <b>Performance</b>
 ✅ Trades: <b>${data.totalTrades}</b>
 🎯 Win Rate: <b>${data.winRate}%</b>
 💵 P&amp;L Total: <b>${data.totalProfit >= 0 ? '+' : ''}$${data.totalProfit}</b>
-─────────────────────
-${data.inPosition ? '🔵 Posição(ões) abertas' : '⚪️ Sem posições abertas'}
 ─────────────────────
 🕐 ${new Date().toLocaleString('pt-PT')}
   `;

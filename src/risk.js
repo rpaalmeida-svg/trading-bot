@@ -41,11 +41,23 @@ function calculateTakeProfit(entryPrice) {
   return entryPrice * (1 + RISK_CONFIG.takeProfitPercent);
 }
 
-function calculatePositionSize(balance, price) {
+function calculatePositionSize(balance, price, symbol = '') {
   const maxCapital = parseFloat(process.env.MAX_CAPITAL) || balance;
   const available = Math.min(balance, maxCapital) * RISK_CONFIG.maxPositionSize;
   const quantity = available / price;
-  return Math.floor(quantity * 100000) / 100000;
+
+  let result;
+  if (symbol.includes('BTC')) result = Math.floor(quantity * 100000) / 100000;
+  else if (symbol.includes('ETH')) result = Math.floor(quantity * 10000) / 10000;
+  else if (symbol.includes('SOL')) result = Math.floor(quantity * 100) / 100;
+  else result = Math.floor(quantity * 1000) / 1000;
+
+  // Quantidades mínimas Binance
+  if (symbol.includes('BTC') && result < 0.00001) return 0;
+  if (symbol.includes('ETH') && result < 0.0001) return 0;
+  if (symbol.includes('SOL') && result < 0.01) return 0;
+
+  return result;
 }
 
 module.exports = {

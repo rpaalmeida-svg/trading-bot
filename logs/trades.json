@@ -1,0 +1,50 @@
+[
+  {
+    "id": 1774450814565,
+    "symbol": "BTCUSDT",
+    "side": "BUY",
+    "price": 71238.54,
+    "quantity": 0.01333,
+    "stopLoss": 70169.9619,
+    "takeProfit": 73375.69619999999,
+    "timestamp": "2026-03-25T15:00:14.565Z",
+    "closed": false,
+    "profit": null,
+    "profitPercent": null,
+    "closePrice": null,
+    "closeTimestamp": null,
+    "closeReason": null
+  },
+  {
+    "id": 1774451160630,
+    "symbol": "BTCUSDT",
+    "side": "BUY",
+    "price": 71262.01,
+    "quantity": 0.013,
+    "stopLoss": 70193.07985,
+    "takeProfit": 73399.8703,
+    "timestamp": "2026-03-25T15:06:00.630Z",
+    "closed": false,
+    "profit": null,
+    "profitPercent": null,
+    "closePrice": null,
+    "closeTimestamp": null,
+    "closeReason": null
+  },
+  {
+    "id": 1774451161610,
+    "symbol": "SOLUSDT",
+    "side": "BUY",
+    "price": 91.99,
+    "quantity": 10.327,
+    "stopLoss": 90.61014999999999,
+    "takeProfit": 94.7497,
+    "timestamp": "2026-03-25T15:06:01.610Z",
+    "closed": false,
+    "profit": null,
+    "profitPercent": null,
+    "closePrice": null,
+    "closeTimestamp": null,
+    "closeReason": null
+  }
+]

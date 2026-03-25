@@ -23,8 +23,8 @@ function calcScore(rsi, fearGreed, volumeRatio) {
 function allocateCapital(signals, totalCapital) {
   // Filtrar só sinais de compra com score mínimo
   const candidates = signals
-    .filter(s => s.signal === 'BUY' && s.score >= MIN_SCORE_TO_BUY)
-    .sort((a, b) => b.score - a.score);
+  .filter(s => (s.signal === 'BUY' || s.score >= 85) && s.score >= MIN_SCORE_TO_BUY)
+  .sort((a, b) => b.score - a.score);
 
   if (candidates.length === 0) {
     logger.info('Nenhum par com score suficiente para comprar');
