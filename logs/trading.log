@@ -236,3 +236,14 @@
 {"timestamp":"2026-03-25T16:25:49.669Z","type":"INFO","message":"Bot multi-par arrancado","data":{"pairs":["BTCUSDT","ETHUSDT","BNBUSDT"]}}
 {"timestamp":"2026-03-25T16:48:53.964Z","type":"ERROR","message":"Erro no ciclo","data":{"message":"Request failed with status code 401"}}
 {"timestamp":"2026-03-25T17:18:54.018Z","type":"ERROR","message":"Erro no ciclo","data":{"message":"Request failed with status code 401"}}
+{"timestamp":"2026-03-25T17:47:10.179Z","type":"INFO","message":"Bot multi-par arrancado","data":{"pairs":["BTCUSDT","ETHUSDT","BNBUSDT"]}}
+{"timestamp":"2026-03-25T17:47:10.510Z","type":"INFO","message":"Saldo obtido com sucesso","data":{"balance":285.3170693}}
+{"timestamp":"2026-03-25T17:47:10.511Z","type":"INFO","message":"Saldo inicial do dia definido","data":{"balance":285.3170693}}
+{"timestamp":"2026-03-25T17:47:12.295Z","type":"INFO","message":"Fear & Greed Index","data":{"value":14,"classification":"Extreme Fear"}}
+{"timestamp":"2026-03-25T17:47:12.415Z","type":"ERROR","message":"Erro ao obter notícias","data":{"message":"articles.forEach is not a function"}}
+{"timestamp":"2026-03-25T17:47:12.416Z","type":"INFO","message":"Ciclo iniciado","data":{"balance":"285.32","fearGreed":14,"newsSignal":"NEUTRAL"}}
+{"timestamp":"2026-03-25T17:47:13.161Z","type":"INFO","message":"Análise BTCUSDT","data":{"interval":"1h","price":70977.43,"rsi":"53.44","signal":"WAIT","score":76}}
+{"timestamp":"2026-03-25T17:47:13.173Z","type":"INFO","message":"Análise ETHUSDT","data":{"interval":"30m","price":2167.71,"rsi":"40.05","signal":"WAIT","score":88}}
+{"timestamp":"2026-03-25T17:47:13.174Z","type":"INFO","message":"Análise BNBUSDT","data":{"interval":"1h","price":646.08,"rsi":"57.97","signal":"WAIT","score":76}}
+{"timestamp":"2026-03-25T17:47:13.422Z","type":"ERROR","message":"Erro ao executar ordem BUY ETHUSDT","data":{"quantity":0.146,"detail":{"code":-2010,"msg":"Account has insufficient balance for requested action."}}}
+{"timestamp":"2026-03-25T17:47:13.422Z","type":"ERROR","message":"Erro ao comprar ETHUSDT","data":{"message":"Request failed with status code 400"}}

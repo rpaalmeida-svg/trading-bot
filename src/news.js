@@ -3,7 +3,6 @@ const logger = require('./logger');
 
 async function getNewsSentiment() {
   try {
-    // CryptoCompare — notícias gratuitas sem token
     const res = await axios.get('https://min-api.cryptocompare.com/data/v2/news/', {
       params: {
         categories: 'BTC,ETH,BNB',
@@ -12,12 +11,13 @@ async function getNewsSentiment() {
       }
     });
 
-    const articles = res.data.Data || [];
-    if (articles.length === 0) {
+    const articles = res.data?.Data;
+
+    if (!articles || !Array.isArray(articles) || articles.length === 0) {
+      logger.info('Sem notícias disponíveis');
       return { sentimentScore: 0, signal: 'NEUTRAL', recentTitles: [] };
     }
 
-    // Palavras positivas e negativas
     const positiveWords = ['surge', 'rally', 'bull', 'gain', 'rise', 'high', 'adoption', 'growth', 'record', 'up'];
     const negativeWords = ['crash', 'bear', 'drop', 'fall', 'low', 'ban', 'hack', 'fear', 'sell', 'down', 'risk'];
 
@@ -25,7 +25,7 @@ async function getNewsSentiment() {
     let negative = 0;
 
     articles.forEach(article => {
-      const text = (article.title + ' ' + article.body).toLowerCase();
+      const text = ((article.title || '') + ' ' + (article.body || '')).toLowerCase();
       positiveWords.forEach(w => { if (text.includes(w)) positive++; });
       negativeWords.forEach(w => { if (text.includes(w)) negative++; });
     });
@@ -33,7 +33,7 @@ async function getNewsSentiment() {
     const total = positive + negative || 1;
     const sentimentScore = parseFloat(((positive - negative) / total * 100).toFixed(2));
     const signal = sentimentScore > 15 ? 'POSITIVE' : sentimentScore < -15 ? 'NEGATIVE' : 'NEUTRAL';
-    const recentTitles = articles.slice(0, 3).map(a => a.title);
+    const recentTitles = articles.slice(0, 3).map(a => a.title || '');
 
     logger.info('News Sentiment', { positive, negative, sentimentScore, signal });
 
