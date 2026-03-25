@@ -1,0 +1,10 @@
+{"timestamp":"2026-03-25T11:08:26.348Z","type":"INFO","message":"Bot arrancado","data":{"symbol":"BTCUSDT"}}
+{"timestamp":"2026-03-25T11:08:26.699Z","type":"INFO","message":"Saldo inicial do dia definido","data":{"balance":10000}}
+{"timestamp":"2026-03-25T11:08:27.450Z","type":"INFO","message":"Saldo: $10000.00 | Preço BTC: $71526.81","data":null}
+{"timestamp":"2026-03-25T11:08:27.452Z","type":"INFO","message":"Análise de mercado","data":{"currentPrice":71526.8,"rsi":"64.58","smaFast":"71387.99","smaSlow":"71233.91"}}
+{"timestamp":"2026-03-25T11:23:27.493Z","type":"INFO","message":"Saldo: $10000.00 | Preço BTC: $71689.91","data":null}
+{"timestamp":"2026-03-25T11:23:27.494Z","type":"INFO","message":"Análise de mercado","data":{"currentPrice":71689.91,"rsi":"73.31","smaFast":"71433.56","smaSlow":"71265.78"}}
+{"timestamp":"2026-03-25T11:32:12.411Z","type":"INFO","message":"Bot arrancado","data":{"symbol":"BTCUSDT"}}
+{"timestamp":"2026-03-25T11:32:13.002Z","type":"INFO","message":"Saldo inicial do dia definido","data":{"balance":10000}}
+{"timestamp":"2026-03-25T11:32:13.751Z","type":"INFO","message":"Análise de mercado","data":{"currentPrice":71975.12,"rsi":"82.42","smaFast":"71534.20","smaSlow":"71310.80"}}
+{"timestamp":"2026-03-25T11:32:13.752Z","type":"INFO","message":"Saldo: $10000.00 | Preço BTC: $71911.32","data":null}
