@@ -73,11 +73,12 @@ function sign(queryString) {
 
 async function getBalance() {
   const timestamp = Date.now();
-  const query = `timestamp=${timestamp}`;
+  const recvWindow = 60000;
+  const query = `timestamp=${timestamp}&recvWindow=${recvWindow}`;
   const signature = sign(query);
   const res = await axios.get(`${BASE_URL}/v3/account`, {
     headers: { 'X-MBX-APIKEY': API_KEY },
-    params: { timestamp, signature }
+    params: { timestamp, recvWindow, signature }
   });
   const usdt = res.data.balances.find(b => b.asset === 'USDT');
   return parseFloat(usdt?.free || 0);
@@ -380,7 +381,17 @@ async function start() {
 
   loadPositions();
   const savedInitialBalance = loadState();
-  const balance = await getBalance();
+  let balance;
+try {
+  balance = await getBalance();
+  logger.info('Saldo obtido com sucesso', { balance });
+} catch (err) {
+  logger.error('Erro ao obter saldo inicial', { 
+    message: err.message,
+    detail: err.response?.data 
+  });
+  throw err;
+}
 
   if (savedInitialBalance) {
     initialBalance = savedInitialBalance;
