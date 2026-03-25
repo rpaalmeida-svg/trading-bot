@@ -3,7 +3,9 @@ const logger = require('./logger');
 
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
-  ssl: { rejectUnauthorized: false }
+  ssl: process.env.DATABASE_URL && process.env.DATABASE_URL.includes('railway') 
+    ? { rejectUnauthorized: false } 
+    : false
 });
 
 async function initDB() {

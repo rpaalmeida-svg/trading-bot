@@ -268,3 +268,12 @@
 {"timestamp":"2026-03-25T18:31:25.824Z","type":"INFO","message":"Análise ETHUSDT","data":{"interval":"30m","price":2168.86,"rsi":"39.71","signal":"WAIT","score":88}}
 {"timestamp":"2026-03-25T18:31:26.077Z","type":"ERROR","message":"Erro ao executar ordem BUY ETHUSDT","data":{"quantity":0.146,"detail":{"code":-2010,"msg":"Account has insufficient balance for requested action."}}}
 {"timestamp":"2026-03-25T18:31:26.078Z","type":"ERROR","message":"Erro ao comprar ETHUSDT","data":{"message":"Request failed with status code 400"}}
+{"timestamp":"2026-03-25T19:01:25.979Z","type":"INFO","message":"Fear & Greed Index","data":{"value":14,"classification":"Extreme Fear"}}
+{"timestamp":"2026-03-25T19:01:26.091Z","type":"INFO","message":"Sem notícias disponíveis","data":null}
+{"timestamp":"2026-03-25T19:01:26.091Z","type":"INFO","message":"Ciclo iniciado","data":{"balance":"29.15","fearGreed":14,"newsSignal":"NEUTRAL"}}
+{"timestamp":"2026-03-25T19:01:26.092Z","type":"WARN","message":"LIMITE DE PERDA DIÁRIA ATINGIDO — bot pausado","data":{"dailyStartBalance":114.6021923,"currentBalance":29.1534423,"lossPercent":"74.56%"}}
+{"timestamp":"2026-03-25T19:02:12.921Z","type":"ERROR","message":"Erro ao iniciar base de dados","data":{"message":"The server does not support SSL connections"}}
+{"timestamp":"2026-03-25T19:02:12.925Z","type":"ERROR","message":"Erro ao guardar estado","data":{"key":"positions","message":"The server does not support SSL connections"}}
+{"timestamp":"2026-03-25T19:03:49.360Z","type":"ERROR","message":"Erro ao iniciar base de dados","data":{"message":"database \"ruialmeida\" does not exist"}}
+{"timestamp":"2026-03-25T19:03:49.365Z","type":"ERROR","message":"Erro ao guardar estado","data":{"key":"positions","message":"database \"ruialmeida\" does not exist"}}
+{"timestamp":"2026-03-25T19:06:03.811Z","type":"INFO","message":"Base de dados iniciada","data":null}
