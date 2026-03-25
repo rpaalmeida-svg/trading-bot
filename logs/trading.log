@@ -221,3 +221,4 @@
 {"timestamp":"2026-03-25T16:07:15.406Z","type":"INFO","message":"Análise BNBUSDT","data":{"interval":"1h","price":645.82,"rsi":"66.07","signal":"WAIT","score":64}}
 {"timestamp":"2026-03-25T16:07:15.651Z","type":"TRADE","message":"Ordem executada: BUY ETHUSDT","data":{"symbol":"ETHUSDT","quantity":0.1466,"orderId":13816959}}
 {"timestamp":"2026-03-25T16:12:54.539Z","type":"INFO","message":"Bot multi-par arrancado","data":{"pairs":["BTCUSDT","ETHUSDT","BNBUSDT"]}}
+{"timestamp":"2026-03-25T16:15:16.040Z","type":"INFO","message":"Bot multi-par arrancado","data":{"pairs":["BTCUSDT","ETHUSDT","BNBUSDT"]}}

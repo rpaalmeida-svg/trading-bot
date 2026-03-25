@@ -285,55 +285,61 @@
 
       // Pares
       if (data.pairs) {
-        document.getElementById('pairs-grid').innerHTML = data.pairs.map(p => `
-          <div class="pair-card ${p.inPosition ? 'active' : ''}">
-            <div class="pair-header">
-              <div class="pair-name">${p.symbol.replace('USDT', '/USDT')}</div>
-              <div class="pair-signal ${p.signal === 'BUY' ? 'green' : p.signal === 'SELL' ? 'red' : 'yellow'}">${p.signal || 'WAIT'}</div>
-            </div>
-            <div class="pair-rows">
-              <div class="pair-item">
-                <div class="plabel">RSI (14)</div>
-                <div class="pvalue ${rsiColor(p.rsi)}">${p.rsi}</div>
-              </div>
-              <div class="pair-item">
-                <div class="plabel">Score</div>
-                <div class="pvalue" style="color:${scoreColor(p.score)}">${p.score}/100</div>
-              </div>
-              <div class="pair-item">
-                <div class="plabel">Preço</div>
-                <div class="pvalue">$${parseFloat(p.currentPrice).toFixed(2)}</div>
-              </div>
-              <div class="pair-item">
-                <div class="plabel">Estado</div>
-                <div class="pvalue ${p.inPosition ? 'green' : ''}">${p.inPosition ? '🔵 Em posição' : '⚪️ Aguardar'}</div>
-              </div>
-              ${p.inPosition ? `
-<div class="pair-item">
-  <div class="plabel">Entrada</div>
-  <div class="pvalue">$${parseFloat(p.entryPrice).toFixed(2)}</div>
-</div>
-<div class="pair-item">
-  <div class="plabel">P&L Actual</div>
-  <div class="pvalue ${parseFloat(p.currentPrice) >= parseFloat(p.entryPrice) ? 'green' : 'red'}">
-    ${((parseFloat(p.currentPrice) - parseFloat(p.entryPrice)) / parseFloat(p.entryPrice) * 100).toFixed(2)}%
-  </div>
-</div>
-<div class="pair-item">
-  <div class="plabel">Stop-Loss</div>
-  <div class="pvalue red">$${parseFloat(p.stopLoss).toFixed(2)}</div>
-</div>
-<div class="pair-item">
-  <div class="plabel">Take-Profit</div>
-  <div class="pvalue green">$${parseFloat(p.takeProfit).toFixed(2)}</div>
-</div>` : ''}
-            </div>
-            <div class="score-bar">
-              <div class="score-fill" style="width:${p.score}%;background:${scoreColor(p.score)}"></div>
-            </div>
+  document.getElementById('pairs-grid').innerHTML = data.pairs.map(p => {
+    let positionHTML = '';
+    if (p.inPosition) {
+      const pnl = p.entryPrice ? ((parseFloat(p.currentPrice) - parseFloat(p.entryPrice)) / parseFloat(p.entryPrice) * 100).toFixed(2) : 0;
+      const pnlColor = parseFloat(pnl) >= 0 ? 'green' : 'red';
+      positionHTML = `
+        <div class="pair-item">
+          <div class="plabel">Entrada</div>
+          <div class="pvalue">$${parseFloat(p.entryPrice).toFixed(2)}</div>
+        </div>
+        <div class="pair-item">
+          <div class="plabel">P&L Actual</div>
+          <div class="pvalue ${pnlColor}">${pnl}%</div>
+        </div>
+        <div class="pair-item">
+          <div class="plabel">Stop-Loss</div>
+          <div class="pvalue red">$${parseFloat(p.stopLoss).toFixed(2)}</div>
+        </div>
+        <div class="pair-item">
+          <div class="plabel">Take-Profit</div>
+          <div class="pvalue green">$${parseFloat(p.takeProfit).toFixed(2)}</div>
+        </div>`;
+    }
+
+    return `
+      <div class="pair-card ${p.inPosition ? 'active' : ''}">
+        <div class="pair-header">
+          <div class="pair-name">${p.symbol.replace('USDT', '/USDT')}</div>
+          <div class="pair-signal ${p.signal === 'BUY' ? 'green' : p.signal === 'SELL' ? 'red' : 'yellow'}">${p.signal || 'WAIT'}</div>
+        </div>
+        <div class="pair-rows">
+          <div class="pair-item">
+            <div class="plabel">RSI (14)</div>
+            <div class="pvalue ${rsiColor(p.rsi)}">${p.rsi}</div>
           </div>
-        `).join('');
-      }
+          <div class="pair-item">
+            <div class="plabel">Score</div>
+            <div class="pvalue" style="color:${scoreColor(p.score)}">${p.score}/100</div>
+          </div>
+          <div class="pair-item">
+            <div class="plabel">Preço</div>
+            <div class="pvalue">$${parseFloat(p.currentPrice).toFixed(2)}</div>
+          </div>
+          <div class="pair-item">
+            <div class="plabel">Estado</div>
+            <div class="pvalue ${p.inPosition ? 'green' : ''}">${p.inPosition ? '🔵 Em posição' : '⚪️ Aguardar'}</div>
+          </div>
+          ${positionHTML}
+        </div>
+        <div class="score-bar">
+          <div class="score-fill" style="width:${p.score}%;background:${scoreColor(p.score)}"></div>
+        </div>
+      </div>`;
+  }).join('');
+}
 
       const now = new Date().toLocaleTimeString('pt-PT');
       logs.unshift({ time: now, msg: `BTC $${data.price} | RSI ${data.rsi} | F&G ${data.fearGreed} | Notícias ${data.news || '—'} | Variação ${(parseFloat(data.balanceChange) >= 0 ? '+' : '')}$${parseFloat(data.balanceChange || 0).toFixed(2)}` });
