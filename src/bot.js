@@ -161,13 +161,15 @@ async function runCycle() {
     const openCount = PAIRS.filter(p => positions[p].inPosition).length;
 
     if (openCount < PAIRS.length && availableCapital > 10) {
-      const allocations = allocateCapital(validAnalyses, availableCapital);
+      const maxCapital = parseFloat(process.env.MAX_CAPITAL) || availableCapital;
+      const capitalToUse = Math.min(availableCapital, maxCapital);
+      const allocations = allocateCapital(validAnalyses, capitalToUse);
 
       for (const alloc of allocations) {
         const pos = positions[alloc.symbol];
         if (pos.inPosition) continue;
 
-        const qty = risk.calculatePositionSize(alloc.allocation, alloc.currentPrice);
+        const qty = risk.calculatePositionSize(alloc.allocation, alloc.currentPrice, alloc.symbol);
         if (qty <= 0) continue;
 
         await placeOrder(alloc.symbol, 'BUY', qty);
