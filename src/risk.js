@@ -1,5 +1,7 @@
 const logger = require('./logger');
 
+const PAIRS_COUNT = 3;
+
 const RISK_CONFIG = {
   maxPositionSize: 0.95,
   stopLossPercent: 0.015,
@@ -12,13 +14,16 @@ const RISK_CONFIG = {
 let dailyStartBalance = null;
 
 function setDailyStartBalance(balance) {
-  dailyStartBalance = balance;
-  logger.info('Saldo inicial do dia definido', { balance });
+  const maxCapital = parseFloat(process.env.MAX_CAPITAL) || balance;
+  dailyStartBalance = Math.min(balance, maxCapital);
+  logger.info('Saldo inicial do dia definido', { balance: dailyStartBalance });
 }
 
 function checkDailyLoss(currentBalance) {
   if (!dailyStartBalance) return false;
-  const loss = (dailyStartBalance - currentBalance) / dailyStartBalance;
+  const maxCapital = parseFloat(process.env.MAX_CAPITAL) || currentBalance;
+  const referenceBalance = Math.min(currentBalance, maxCapital);
+  const loss = (dailyStartBalance - referenceBalance) / dailyStartBalance;
   if (loss >= RISK_CONFIG.maxDailyLoss) {
     logger.warn('LIMITE DE PERDA DIÁRIA ATINGIDO — bot pausado', {
       dailyStartBalance,
@@ -38,7 +43,6 @@ function calculateTakeProfit(entryPrice) {
   return entryPrice * (1 + RISK_CONFIG.takeProfitPercent);
 }
 
-// Trailing Stop-Loss — sobe com o preço, nunca desce
 function updateTrailingStop(currentPrice, currentStopLoss) {
   const newStop = currentPrice * (1 - RISK_CONFIG.trailingStopPercent);
   if (newStop > currentStopLoss) {
@@ -54,7 +58,7 @@ function updateTrailingStop(currentPrice, currentStopLoss) {
 
 function calculatePositionSize(balance, price, symbol = '') {
   const maxCapital = parseFloat(process.env.MAX_CAPITAL) || balance;
-  const capitalPerPair = maxCapital / 3; // divide pelos 3 pares
+  const capitalPerPair = maxCapital / PAIRS_COUNT;
   const available = Math.min(balance, capitalPerPair) * RISK_CONFIG.maxPositionSize;
   const quantity = available / price;
 
