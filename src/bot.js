@@ -8,17 +8,23 @@ const strategy = require('./strategy');
 const risk = require('./risk');
 const telegram = require('./telegram');
 const { getFearGreedIndex, getEmoji } = require('./sentiment');
+const { PAIRS, calcScore, allocateCapital, getReason } = require('./portfolio');
 
 const BASE_URL = 'https://testnet.binance.vision/api';
 const API_KEY = process.env.BINANCE_API_KEY;
 const SECRET_KEY = process.env.BINANCE_SECRET_KEY;
-const SYMBOL = process.env.SYMBOL || 'BTCUSDT';
 
-let prices = [];
-let inPosition = false;
-let entryPrice = null;
-let stopLoss = null;
-let takeProfit = null;
+// Estado por par
+const positions = {};
+PAIRS.forEach(p => {
+  positions[p] = {
+    inPosition: false,
+    entryPrice: null,
+    stopLoss: null,
+    takeProfit: null,
+    quantity: null
+  };
+});
 
 function sign(queryString) {
   return crypto
@@ -41,30 +47,30 @@ async function getBalance() {
   return parseFloat(usdt?.free || 0);
 }
 
-async function getPrice() {
+async function getPrice(symbol) {
   const res = await axios.get(`${BASE_URL}/v3/ticker/price`, {
-    params: { symbol: SYMBOL }
+    params: { symbol }
   });
   return parseFloat(res.data.price);
 }
 
-async function getPriceHistory() {
+async function getPriceHistory(symbol) {
   const res = await axios.get(`${BASE_URL}/v3/klines`, {
-    params: { symbol: SYMBOL, interval: '15m', limit: 50 }
+    params: { symbol, interval: '15m', limit: 50 }
   });
   return res.data.map(k => parseFloat(k[4]));
 }
 
-async function placeOrder(side, quantity) {
-  const timestamp = Date.now();
-  const params = {
-    symbol: SYMBOL,
-    side,
-    type: 'MARKET',
-    quantity,
-    timestamp
-  };
+async function getVolume(symbol) {
+  const res = await axios.get(`${BASE_URL}/v3/ticker/24hr`, {
+    params: { symbol }
+  });
+  return parseFloat(res.data.quoteVolume);
+}
 
+async function placeOrder(symbol, side, quantity) {
+  const timestamp = Date.now();
+  const params = { symbol, side, type: 'MARKET', quantity, timestamp };
   const query = new URLSearchParams(params).toString();
   const signature = sign(query);
 
@@ -77,58 +83,63 @@ async function placeOrder(side, quantity) {
     }
   );
 
-  logger.trade(`Ordem executada: ${side}`, {
-    symbol: SYMBOL,
-    quantity,
-    orderId: res.data.orderId
+  logger.trade(`Ordem executada: ${side} ${symbol}`, {
+    symbol, quantity, orderId: res.data.orderId
   });
 
   return res.data;
 }
 
+async function analyzePair(symbol, sentiment) {
+  try {
+    const prices = await getPriceHistory(symbol);
+    const currentPrice = await getPrice(symbol);
+    const volume = await getVolume(symbol);
+    const analysis = strategy.analyzeMarket(prices);
+
+    // Volume ratio — compara com media simples
+    const avgVolume = volume / 24;
+    const volumeRatio = avgVolume > 0 ? volume / avgVolume : 1;
+
+    const score = analysis.rsi
+      ? calcScore(analysis.rsi, sentiment.value, volumeRatio)
+      : 0;
+
+    logger.info(`Análise ${symbol}`, {
+      price: currentPrice,
+      rsi: analysis.rsi ? analysis.rsi.toFixed(2) : 'N/A',
+      signal: analysis.signal,
+      score
+    });
+
+    return {
+      symbol,
+      currentPrice,
+      prices,
+      analysis,
+      score,
+      signal: analysis.signal,
+      rsi: analysis.rsi,
+      smaFast: analysis.smaFast,
+      smaSlow: analysis.smaSlow,
+      volume
+    };
+  } catch (err) {
+    logger.error(`Erro ao analisar ${symbol}`, { message: err.message });
+    return null;
+  }
+}
+
 async function runCycle() {
   try {
     const balance = await getBalance();
-    const currentPrice = await getPrice();
-    prices = await getPriceHistory();
-
-    const analysis = strategy.analyzeMarket(prices);
     const sentiment = await getFearGreedIndex();
 
-    logger.info(`Saldo: $${balance.toFixed(2)} | Preço BTC: $${currentPrice.toFixed(2)} | Fear&Greed: ${sentiment.value} (${sentiment.classification})`);
-
-    // Actualizar dashboard
-    updateDashboard({
+    logger.info(`Ciclo iniciado`, {
       balance: balance.toFixed(2),
-      price: currentPrice.toFixed(2),
-      rsi: analysis.rsi ? analysis.rsi.toFixed(2) : 'N/A',
-      smaFast: analysis.smaFast ? analysis.smaFast.toFixed(2) : 'N/A',
-      smaSlow: analysis.smaSlow ? analysis.smaSlow.toFixed(2) : 'N/A',
-      signal: analysis.signal,
       fearGreed: sentiment.value,
-      fearGreedLabel: sentiment.classification,
-      fearGreedEmoji: getEmoji(sentiment.value),
-      inPosition,
-      entryPrice: entryPrice ? entryPrice.toFixed(2) : null,
-      stopLoss: stopLoss ? stopLoss.toFixed(2) : null,
-      takeProfit: takeProfit ? takeProfit.toFixed(2) : null,
+      fearGreedLabel: sentiment.classification
     });
-
-    // Enviar ponto de situação ao Telegram
-    await telegram.sendMessage(telegram.formatStatus({
-      balance: balance.toFixed(2),
-      price: currentPrice.toFixed(2),
-      rsi: analysis.rsi ? analysis.rsi.toFixed(2) : 'N/A',
-      smaFast: analysis.smaFast ? analysis.smaFast.toFixed(2) : 'N/A',
-      smaSlow: analysis.smaSlow ? analysis.smaSlow.toFixed(2) : 'N/A',
-      fearGreed: sentiment.value,
-      fearGreedLabel: sentiment.classification,
-      fearGreedEmoji: getEmoji(sentiment.value),
-      inPosition,
-      entryPrice: entryPrice ? entryPrice.toFixed(2) : null,
-      stopLoss: stopLoss ? stopLoss.toFixed(2) : null,
-      takeProfit: takeProfit ? takeProfit.toFixed(2) : null,
-    }));
 
     // Verificar limite de perda diária
     const shouldStop = risk.checkDailyLoss(balance);
@@ -137,80 +148,122 @@ async function runCycle() {
       return;
     }
 
-    // Lógica de decisão combinada — técnica + sentimento
-    const techBuy = analysis.signal === 'BUY';
-    const techSell = analysis.signal === 'SELL';
-    const sentimentBuy = sentiment.signal === 'BUY' || sentiment.signal === 'NEUTRAL';
-    const sentimentSell = sentiment.signal === 'SELL';
+    // Analisar todos os pares em paralelo
+    const analyses = await Promise.all(
+      PAIRS.map(symbol => analyzePair(symbol, sentiment))
+    );
+    const validAnalyses = analyses.filter(a => a !== null);
 
-    // Se estiver em posição — verificar stop-loss e take-profit
-    if (inPosition) {
-      if (currentPrice <= stopLoss) {
-        const qty = risk.calculatePositionSize(balance, currentPrice);
-        await placeOrder('SELL', qty);
+    // Gerir posições abertas
+    for (const data of validAnalyses) {
+      const pos = positions[data.symbol];
+      if (!pos.inPosition) continue;
+
+      const { currentPrice, symbol, analysis } = data;
+
+      if (currentPrice <= pos.stopLoss) {
+        await placeOrder(symbol, 'SELL', pos.quantity);
+        const profit = ((currentPrice - pos.entryPrice) * pos.quantity).toFixed(2);
         await telegram.sendMessage(telegram.formatTrade('SELL', {
-          symbol: SYMBOL,
-          price: currentPrice.toFixed(2),
-          quantity: qty,
-          profit: (currentPrice - entryPrice).toFixed(2)
+          symbol, price: currentPrice.toFixed(2),
+          quantity: pos.quantity, profit
         }));
-        await telegram.sendMessage(telegram.formatAlert('🛑 Stop-Loss activado!'));
-        inPosition = false;
-        entryPrice = null;
-        return;
+        await telegram.sendMessage(telegram.formatAlert(`🛑 Stop-Loss activado em ${symbol}!`));
+        pos.inPosition = false;
+        pos.entryPrice = null;
+        continue;
       }
 
-      if (currentPrice >= takeProfit) {
-        const qty = risk.calculatePositionSize(balance, currentPrice);
-        await placeOrder('SELL', qty);
+      if (currentPrice >= pos.takeProfit) {
+        await placeOrder(symbol, 'SELL', pos.quantity);
+        const profit = ((currentPrice - pos.entryPrice) * pos.quantity).toFixed(2);
         await telegram.sendMessage(telegram.formatTrade('SELL', {
-          symbol: SYMBOL,
-          price: currentPrice.toFixed(2),
-          quantity: qty,
-          profit: (currentPrice - entryPrice).toFixed(2)
+          symbol, price: currentPrice.toFixed(2),
+          quantity: pos.quantity, profit
         }));
-        inPosition = false;
-        entryPrice = null;
-        return;
+        pos.inPosition = false;
+        pos.entryPrice = null;
+        continue;
       }
 
-      // Venda antecipada se sentimento muito negativo
-      if (techSell && sentimentSell) {
-        const qty = risk.calculatePositionSize(balance, currentPrice);
-        await placeOrder('SELL', qty);
+      // Venda antecipada se ambos os indicadores negativos
+      if (analysis.signal === 'SELL' && sentiment.signal === 'SELL') {
+        await placeOrder(symbol, 'SELL', pos.quantity);
+        const profit = ((currentPrice - pos.entryPrice) * pos.quantity).toFixed(2);
         await telegram.sendMessage(telegram.formatTrade('SELL', {
-          symbol: SYMBOL,
-          price: currentPrice.toFixed(2),
-          quantity: qty,
-          profit: (currentPrice - entryPrice).toFixed(2)
+          symbol, price: currentPrice.toFixed(2),
+          quantity: pos.quantity, profit
         }));
-        await telegram.sendMessage(telegram.formatAlert(`⚠️ Venda antecipada — RSI alto + Fear&Greed: ${sentiment.value} (${sentiment.classification})`));
-        inPosition = false;
-        entryPrice = null;
-        return;
+        await telegram.sendMessage(telegram.formatAlert(`⚠️ Venda antecipada em ${symbol} — RSI alto + medo elevado`));
+        pos.inPosition = false;
+        pos.entryPrice = null;
       }
-
-      return;
     }
 
-    // Comprar apenas se técnica E sentimento concordam
-    if (techBuy && sentimentBuy && balance > 10) {
-      const qty = risk.calculatePositionSize(balance, currentPrice);
-      await placeOrder('BUY', qty);
-      inPosition = true;
-      entryPrice = currentPrice;
-      stopLoss = risk.calculateStopLoss(currentPrice);
-      takeProfit = risk.calculateTakeProfit(currentPrice);
+    // Capital disponível para novas posições
+    const openPositions = PAIRS.filter(p => positions[p].inPosition).length;
+    const availableCapital = balance;
 
-      await telegram.sendMessage(telegram.formatTrade('BUY', {
-        symbol: SYMBOL,
-        price: currentPrice.toFixed(2),
-        quantity: qty,
-        stopLoss: stopLoss.toFixed(2),
-        takeProfit: takeProfit.toFixed(2)
-      }));
+    if (openPositions < PAIRS.length && availableCapital > 10) {
+      // Calcular alocações inteligentes
+      const allocations = allocateCapital(validAnalyses, availableCapital);
 
-      await telegram.sendMessage(telegram.formatAlert(`🟢 Compra confirmada!\nRSI: ${analysis.rsi.toFixed(2)} + Fear&Greed: ${sentiment.value} (${sentiment.classification})`));
+      for (const alloc of allocations) {
+        const pos = positions[alloc.symbol];
+        if (pos.inPosition) continue;
+
+        const qty = risk.calculatePositionSize(alloc.allocation, alloc.currentPrice);
+        if (qty <= 0) continue;
+
+        await placeOrder(alloc.symbol, 'BUY', qty);
+        pos.inPosition = true;
+        pos.entryPrice = alloc.currentPrice;
+        pos.stopLoss = risk.calculateStopLoss(alloc.currentPrice);
+        pos.takeProfit = risk.calculateTakeProfit(alloc.currentPrice);
+        pos.quantity = qty;
+
+        const reason = getReason(alloc.score, alloc.rsi, sentiment.value);
+
+        await telegram.sendMessage(telegram.formatTrade('BUY', {
+          symbol: alloc.symbol,
+          price: alloc.currentPrice.toFixed(2),
+          quantity: qty,
+          stopLoss: pos.stopLoss.toFixed(2),
+          takeProfit: pos.takeProfit.toFixed(2)
+        }));
+
+        await telegram.sendMessage(
+          telegram.formatAlert(`🟢 Compra ${alloc.symbol}\nScore: ${alloc.score}/100\nRazão: ${reason}\nCapital alocado: $${alloc.allocation.toFixed(2)}`)
+        );
+      }
+    }
+
+    // Actualizar dashboard com dados do BTC (par principal)
+    const btcData = validAnalyses.find(a => a.symbol === 'BTCUSDT');
+    if (btcData) {
+      updateDashboard({
+        balance: balance.toFixed(2),
+        price: btcData.currentPrice.toFixed(2),
+        rsi: btcData.rsi ? btcData.rsi.toFixed(2) : 'N/A',
+        smaFast: btcData.smaFast ? btcData.smaFast.toFixed(2) : 'N/A',
+        smaSlow: btcData.smaSlow ? btcData.smaSlow.toFixed(2) : 'N/A',
+        signal: btcData.signal,
+        fearGreed: sentiment.value,
+        fearGreedLabel: sentiment.classification,
+        fearGreedEmoji: getEmoji(sentiment.value),
+        inPosition: positions['BTCUSDT'].inPosition,
+        entryPrice: positions['BTCUSDT'].entryPrice,
+        stopLoss: positions['BTCUSDT'].stopLoss,
+        takeProfit: positions['BTCUSDT'].takeProfit,
+        pairs: PAIRS.map(p => ({
+          symbol: p,
+          inPosition: positions[p].inPosition,
+          entryPrice: positions[p].entryPrice,
+          score: validAnalyses.find(a => a.symbol === p)?.score || 0,
+          rsi: validAnalyses.find(a => a.symbol === p)?.rsi?.toFixed(2) || 'N/A',
+          signal: validAnalyses.find(a => a.symbol === p)?.signal || 'WAIT'
+        }))
+      });
     }
 
   } catch (err) {
@@ -220,8 +273,8 @@ async function runCycle() {
 }
 
 async function start() {
-  logger.info('Bot arrancado', { symbol: SYMBOL });
-  await telegram.sendMessage('🚀 <b>Trading Bot arrancou!</b>\nA monitorizar ' + SYMBOL + ' de 15 em 15 minutos.');
+  logger.info('Bot multi-par arrancado', { pairs: PAIRS });
+  await telegram.sendMessage(`🚀 <b>Trading Bot Multi-Par arrancou!</b>\nA monitorizar: ${PAIRS.join(', ')} de 15 em 15 minutos.`);
 
   const balance = await getBalance();
   risk.setDailyStartBalance(balance);
