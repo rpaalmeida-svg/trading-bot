@@ -21,7 +21,7 @@
     }
     .grid {
       display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
       gap: 16px;
       margin-bottom: 30px;
     }
@@ -40,13 +40,19 @@
       letter-spacing: 1px;
     }
     .card .value {
-      font-size: 1.6rem;
+      font-size: 1.5rem;
       font-weight: bold;
       color: #58a6ff;
     }
     .card .value.green { color: #3fb950; }
     .card .value.red { color: #f85149; }
     .card .value.yellow { color: #d29922; }
+    .card .value.orange { color: #e3832a; }
+    .card .sub {
+      font-size: 0.75rem;
+      color: #8b949e;
+      margin-top: 4px;
+    }
     .status-bar {
       background: #161b22;
       border: 1px solid #30363d;
@@ -63,9 +69,8 @@
       border-radius: 50%;
       background: #3fb950;
       animation: pulse 2s infinite;
+      flex-shrink: 0;
     }
-    .dot.waiting { background: #d29922; }
-    .dot.position { background: #58a6ff; }
     @keyframes pulse {
       0%, 100% { opacity: 1; }
       50% { opacity: 0.4; }
@@ -99,6 +104,45 @@
       font-weight: bold;
       color: #e6edf3;
     }
+    .sentiment-bar {
+      background: #161b22;
+      border: 1px solid #30363d;
+      border-radius: 12px;
+      padding: 20px;
+      margin-bottom: 30px;
+    }
+    .sentiment-bar h2 {
+      color: #58a6ff;
+      margin-bottom: 16px;
+      font-size: 1rem;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+    }
+    .fg-bar-container {
+      position: relative;
+      height: 12px;
+      border-radius: 6px;
+      background: linear-gradient(to right, #f85149, #d29922, #3fb950, #d29922, #f85149);
+      margin-bottom: 8px;
+    }
+    .fg-marker {
+      position: absolute;
+      top: -4px;
+      width: 20px;
+      height: 20px;
+      border-radius: 50%;
+      background: #fff;
+      border: 3px solid #58a6ff;
+      transform: translateX(-50%);
+      transition: left 0.5s ease;
+    }
+    .fg-labels {
+      display: flex;
+      justify-content: space-between;
+      font-size: 0.7rem;
+      color: #8b949e;
+      margin-top: 4px;
+    }
     .log-box {
       background: #161b22;
       border: 1px solid #30363d;
@@ -123,22 +167,31 @@
       font-size: 0.85rem;
       color: #8b949e;
     }
-    #log-list li span {
-      color: #58a6ff;
-      margin-right: 8px;
-    }
-    #log-list li.trade { color: #3fb950; }
-    #log-list li.warn { color: #f85149; }
+    #log-list li span { color: #58a6ff; margin-right: 8px; }
     #updated {
       text-align: center;
       color: #8b949e;
       font-size: 0.8rem;
       margin-top: 20px;
     }
+    .logout {
+      position: fixed;
+      top: 16px;
+      right: 20px;
+      font-size: 0.8rem;
+      color: #8b949e;
+      text-decoration: none;
+      background: #161b22;
+      border: 1px solid #30363d;
+      padding: 6px 14px;
+      border-radius: 8px;
+    }
+    .logout:hover { color: #f85149; border-color: #f85149; }
   </style>
 </head>
 <body>
 
+  <a href="/logout" class="logout">Sair</a>
   <h1>🤖 Trading Bot — Dashboard</h1>
 
   <div class="status-bar">
@@ -168,12 +221,31 @@
       <div class="value yellow" id="smaSlow">—</div>
     </div>
     <div class="card">
+      <div class="label">Fear & Greed</div>
+      <div class="value" id="fg-value">—</div>
+      <div class="sub" id="fg-label">—</div>
+    </div>
+    <div class="card">
       <div class="label">Sinal Actual</div>
       <div class="value" id="signal">—</div>
     </div>
   </div>
 
-  <div class="position-box" id="position-box">
+  <div class="sentiment-bar">
+    <h2>📊 Fear & Greed Index</h2>
+    <div class="fg-bar-container">
+      <div class="fg-marker" id="fg-marker" style="left: 50%"></div>
+    </div>
+    <div class="fg-labels">
+      <span>Medo Extremo</span>
+      <span>Medo</span>
+      <span>Neutro</span>
+      <span>Ganância</span>
+      <span>Ganância Extrema</span>
+    </div>
+  </div>
+
+  <div class="position-box">
     <h2>📊 Posição Actual</h2>
     <div id="no-position" style="color:#8b949e">Sem posição aberta</div>
     <div class="position-grid" id="position-grid" style="display:none">
@@ -183,11 +255,11 @@
       </div>
       <div class="position-item">
         <div class="plabel">Stop-Loss</div>
-        <div class="pvalue red" id="stopLoss">—</div>
+        <div class="pvalue" style="color:#f85149" id="stopLoss">—</div>
       </div>
       <div class="position-item">
         <div class="plabel">Take-Profit</div>
-        <div class="pvalue green" id="takeProfit">—</div>
+        <div class="pvalue" style="color:#3fb950" id="takeProfit">—</div>
       </div>
       <div class="position-item">
         <div class="plabel">P&L Actual</div>
@@ -208,13 +280,9 @@
     const logs = [];
 
     socket.on('update', (data) => {
-      // Saldo
       document.getElementById('balance').textContent = '$' + data.balance;
-
-      // Preço
       document.getElementById('price').textContent = '$' + data.price;
 
-      // RSI com cor
       const rsiEl = document.getElementById('rsi');
       rsiEl.textContent = data.rsi;
       rsiEl.className = 'value';
@@ -222,9 +290,21 @@
       else if (parseFloat(data.rsi) > 65) rsiEl.classList.add('red');
       else rsiEl.classList.add('yellow');
 
-      // SMAs
       document.getElementById('smaFast').textContent = '$' + data.smaFast;
       document.getElementById('smaSlow').textContent = '$' + data.smaSlow;
+
+      // Fear & Greed
+      const fg = parseInt(data.fearGreed);
+      const fgEl = document.getElementById('fg-value');
+      fgEl.textContent = fg;
+      fgEl.className = 'value';
+      if (fg <= 25) fgEl.classList.add('green');
+      else if (fg <= 45) fgEl.classList.add('yellow');
+      else if (fg <= 55) fgEl.classList.add('yellow');
+      else if (fg <= 75) fgEl.classList.add('orange');
+      else fgEl.classList.add('red');
+      document.getElementById('fg-label').textContent = data.fearGreedLabel || '—';
+      document.getElementById('fg-marker').style.left = fg + '%';
 
       // Sinal
       const signalEl = document.getElementById('signal');
@@ -234,16 +314,11 @@
       else if (data.signal === 'SELL') signalEl.classList.add('red');
       else signalEl.classList.add('yellow');
 
-      // Status bar
+      // Status
       const dot = document.getElementById('status-dot');
       const statusText = document.getElementById('status-text');
       dot.className = 'dot';
-      if (data.inPosition) {
-        dot.classList.add('position');
-        statusText.textContent = '🔵 Em posição aberta';
-      } else {
-        statusText.textContent = '🟢 Bot activo — a monitorizar';
-      }
+      statusText.textContent = data.inPosition ? '🔵 Em posição aberta' : '🟢 Bot activo — a monitorizar';
 
       // Posição
       if (data.inPosition) {
@@ -252,11 +327,11 @@
         document.getElementById('entryPrice').textContent = '$' + data.entryPrice;
         document.getElementById('stopLoss').textContent = '$' + data.stopLoss;
         document.getElementById('takeProfit').textContent = '$' + data.takeProfit;
-
         const pnl = ((parseFloat(data.price) - parseFloat(data.entryPrice)) / parseFloat(data.entryPrice) * 100).toFixed(2);
         const pnlEl = document.getElementById('pnl');
         pnlEl.textContent = pnl + '%';
-        pnlEl.className = 'pvalue ' + (pnl >= 0 ? 'green' : 'red');
+        pnlEl.className = 'pvalue ' + (pnl >= 0 ? '' : '');
+        pnlEl.style.color = pnl >= 0 ? '#3fb950' : '#f85149';
       } else {
         document.getElementById('no-position').style.display = 'block';
         document.getElementById('position-grid').style.display = 'none';
@@ -264,13 +339,10 @@
 
       // Log
       const now = new Date().toLocaleTimeString('pt-PT');
-      logs.unshift({ time: now, msg: `BTC $${data.price} | RSI ${data.rsi} | ${data.signal || 'WAIT'}` });
+      logs.unshift({ time: now, msg: `BTC $${data.price} | RSI ${data.rsi} | F&G ${data.fearGreed} | ${data.signal || 'WAIT'}` });
       if (logs.length > 50) logs.pop();
+      document.getElementById('log-list').innerHTML = logs.map(l => `<li><span>${l.time}</span>${l.msg}</li>`).join('');
 
-      const logList = document.getElementById('log-list');
-      logList.innerHTML = logs.map(l => `<li><span>${l.time}</span>${l.msg}</li>`).join('');
-
-      // Timestamp
       document.getElementById('updated').textContent = 'Última actualização: ' + new Date().toLocaleString('pt-PT');
     });
   </script>

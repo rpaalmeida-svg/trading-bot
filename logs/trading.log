@@ -25,3 +25,8 @@
 {"timestamp":"2026-03-25T12:55:48.366Z","type":"INFO","message":"Análise de mercado","data":{"currentPrice":71416.68,"rsi":"55.04","smaFast":"71589.93","smaSlow":"71401.54"}}
 {"timestamp":"2026-03-25T12:55:49.719Z","type":"INFO","message":"Fear & Greed Index","data":{"value":14,"classification":"Extreme Fear"}}
 {"timestamp":"2026-03-25T12:55:49.719Z","type":"INFO","message":"Saldo: $10000.00 | Preço BTC: $71416.69 | Fear&Greed: 14 (Extreme Fear)","data":null}
+{"timestamp":"2026-03-25T13:01:59.555Z","type":"INFO","message":"Bot arrancado","data":{"symbol":"BTCUSDT"}}
+{"timestamp":"2026-03-25T13:02:00.604Z","type":"INFO","message":"Saldo inicial do dia definido","data":{"balance":10000}}
+{"timestamp":"2026-03-25T13:02:01.801Z","type":"INFO","message":"Análise de mercado","data":{"currentPrice":71773.19,"rsi":"64.22","smaFast":"71652.75","smaSlow":"71456.08"}}
+{"timestamp":"2026-03-25T13:02:02.152Z","type":"INFO","message":"Fear & Greed Index","data":{"value":14,"classification":"Extreme Fear"}}
+{"timestamp":"2026-03-25T13:02:02.154Z","type":"INFO","message":"Saldo: $10000.00 | Preço BTC: $71773.20 | Fear&Greed: 14 (Extreme Fear)","data":null}
