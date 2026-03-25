@@ -1,47 +1,43 @@
 const axios = require('axios');
 const logger = require('./logger');
 
-const TOKEN = process.env.CRYPTOPANIC_TOKEN;
-
 async function getNewsSentiment() {
   try {
-    const res = await axios.get('https://cryptopanic.com/api/v1/posts/', {
+    // CryptoCompare — notícias gratuitas sem token
+    const res = await axios.get('https://min-api.cryptocompare.com/data/v2/news/', {
       params: {
-        auth_token: TOKEN,
-        currencies: 'BTC,ETH,SOL',
-        filter: 'hot',
-        public: true
+        categories: 'BTC,ETH,BNB',
+        lang: 'EN',
+        limit: 10
       }
     });
 
-    const posts = res.data.results || [];
+    const articles = res.data.Data || [];
+    if (articles.length === 0) {
+      return { sentimentScore: 0, signal: 'NEUTRAL', recentTitles: [] };
+    }
+
+    // Palavras positivas e negativas
+    const positiveWords = ['surge', 'rally', 'bull', 'gain', 'rise', 'high', 'adoption', 'growth', 'record', 'up'];
+    const negativeWords = ['crash', 'bear', 'drop', 'fall', 'low', 'ban', 'hack', 'fear', 'sell', 'down', 'risk'];
+
     let positive = 0;
     let negative = 0;
-    let neutral = 0;
 
-    posts.forEach(post => {
-      const votes = post.votes || {};
-      positive += votes.positive || 0;
-      negative += votes.negative || 0;
-      neutral += votes.neutral || 0;
+    articles.forEach(article => {
+      const text = (article.title + ' ' + article.body).toLowerCase();
+      positiveWords.forEach(w => { if (text.includes(w)) positive++; });
+      negativeWords.forEach(w => { if (text.includes(w)) negative++; });
     });
 
-    const total = positive + negative + neutral || 1;
-    const sentimentScore = ((positive - negative) / total) * 100;
+    const total = positive + negative || 1;
+    const sentimentScore = parseFloat(((positive - negative) / total * 100).toFixed(2));
+    const signal = sentimentScore > 15 ? 'POSITIVE' : sentimentScore < -15 ? 'NEGATIVE' : 'NEUTRAL';
+    const recentTitles = articles.slice(0, 3).map(a => a.title);
 
-    const signal = sentimentScore > 10 ? 'POSITIVE'
-                 : sentimentScore < -10 ? 'NEGATIVE'
-                 : 'NEUTRAL';
+    logger.info('News Sentiment', { positive, negative, sentimentScore, signal });
 
-    const recentTitles = posts.slice(0, 3).map(p => p.title);
-
-    logger.info('News Sentiment', {
-      positive, negative, neutral,
-      sentimentScore: sentimentScore.toFixed(2),
-      signal
-    });
-
-    return { sentimentScore: parseFloat(sentimentScore.toFixed(2)), signal, recentTitles };
+    return { sentimentScore, signal, recentTitles };
 
   } catch (err) {
     logger.error('Erro ao obter notícias', { message: err.message });

@@ -233,3 +233,4 @@
 {"timestamp":"2026-03-25T16:18:55.541Z","type":"INFO","message":"Análise ETHUSDT","data":{"interval":"30m","price":2160.29,"rsi":"36.94","signal":"WAIT","score":88}}
 {"timestamp":"2026-03-25T16:18:56.242Z","type":"ERROR","message":"Erro no ciclo","data":{"message":"Request failed with status code 400"}}
 {"timestamp":"2026-03-25T16:22:36.777Z","type":"INFO","message":"Bot multi-par arrancado","data":{"pairs":["BTCUSDT","ETHUSDT","BNBUSDT"]}}
+{"timestamp":"2026-03-25T16:25:49.669Z","type":"INFO","message":"Bot multi-par arrancado","data":{"pairs":["BTCUSDT","ETHUSDT","BNBUSDT"]}}
