@@ -335,7 +335,8 @@
       }
 
       const now = new Date().toLocaleTimeString('pt-PT');
-      logs.unshift({ time: now, msg: `BTC $${data.price} | RSI ${data.rsi} | F&G ${data.fearGreed} | Notícias ${data.news || '—'} | Variação ${change >= 0 ? '+' : ''}$${change.toFixed(2)}` });
+     const openPairs = data.pairs ? data.pairs.filter(p => p.inPosition).map(p => `${p.symbol.replace('USDT','')} ${p.entryPrice ? ((parseFloat(p.currentPrice) - parseFloat(p.entryPrice)) / parseFloat(p.entryPrice) * 100).toFixed(2) + '%' : ''}`) : [];
+logs.unshift({ time: now, msg: `BTC $${data.price} | RSI ${data.rsi} | F&G ${data.fearGreed} | ${openPairs.length > 0 ? '🔵 ' + openPairs.join(' | ') : '⚪️ Sem posições'}` });
       if (logs.length > 50) logs.pop();
       document.getElementById('log-list').innerHTML = logs.map(l => `<li><span>${l.time}</span>${l.msg}</li>`).join('');
       document.getElementById('updated').textContent = 'Última actualização: ' + new Date().toLocaleString('pt-PT');
