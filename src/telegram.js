@@ -24,15 +24,15 @@ function formatStatus(data) {
 💰 Saldo: <b>$${data.balance}</b>
 📊 BTC/USDT: <b>$${data.price}</b>
 📈 RSI: <b>${data.rsi}</b>
-📉 SMA Rápida: <b>${data.smaFast}</b>
-📉 SMA Lenta: <b>${data.smaSlow}</b>
 ─────────────────────
 ${data.fearGreedEmoji} Fear &amp; Greed: <b>${data.fearGreed} — ${data.fearGreedLabel}</b>
 ─────────────────────
-${data.inPosition ? `🔵 Em posição
-   Entrada: $${data.entryPrice}
-   Stop-Loss: $${data.stopLoss}
-   Take-Profit: $${data.takeProfit}` : '⚪️ Sem posição aberta'}
+📊 <b>Performance</b>
+✅ Trades: <b>${data.totalTrades}</b>
+🎯 Win Rate: <b>${data.winRate}%</b>
+💵 P&amp;L Total: <b>${data.totalProfit >= 0 ? '+' : ''}$${data.totalProfit}</b>
+─────────────────────
+${data.inPosition ? '🔵 Posição(ões) abertas' : '⚪️ Sem posições abertas'}
 ─────────────────────
 🕐 ${new Date().toLocaleString('pt-PT')}
   `;
@@ -47,7 +47,7 @@ ${emoji} <b>Ordem Executada!</b>
 💵 Preço: <b>$${data.price}</b>
 📦 Quantidade: <b>${data.quantity}</b>
 ${type === 'BUY' ? `🛑 Stop-Loss: $${data.stopLoss}
-🎯 Take-Profit: $${data.takeProfit}` : `💰 Resultado: ${data.profit > 0 ? '+' : ''}$${data.profit}`}
+🎯 Take-Profit: $${data.takeProfit}` : `💰 Resultado: <b>${data.profit >= 0 ? '+' : ''}$${data.profit}</b>`}
 ─────────────────────
 🕐 ${new Date().toLocaleString('pt-PT')}
   `;
@@ -57,9 +57,4 @@ function formatAlert(message) {
   return `⚠️ <b>ALERTA</b>\n─────────────────────\n${message}\n─────────────────────\n🕐 ${new Date().toLocaleString('pt-PT')}`;
 }
 
-module.exports = {
-  sendMessage,
-  formatStatus,
-  formatTrade,
-  formatAlert
-};
+module.exports = { sendMessage, formatStatus, formatTrade, formatAlert };
