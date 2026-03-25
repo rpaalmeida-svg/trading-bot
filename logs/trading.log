@@ -222,3 +222,14 @@
 {"timestamp":"2026-03-25T16:07:15.651Z","type":"TRADE","message":"Ordem executada: BUY ETHUSDT","data":{"symbol":"ETHUSDT","quantity":0.1466,"orderId":13816959}}
 {"timestamp":"2026-03-25T16:12:54.539Z","type":"INFO","message":"Bot multi-par arrancado","data":{"pairs":["BTCUSDT","ETHUSDT","BNBUSDT"]}}
 {"timestamp":"2026-03-25T16:15:16.040Z","type":"INFO","message":"Bot multi-par arrancado","data":{"pairs":["BTCUSDT","ETHUSDT","BNBUSDT"]}}
+{"timestamp":"2026-03-25T16:18:39.482Z","type":"INFO","message":"Bot multi-par arrancado","data":{"pairs":["BTCUSDT","ETHUSDT","BNBUSDT"]}}
+{"timestamp":"2026-03-25T16:18:53.076Z","type":"INFO","message":"Bot multi-par arrancado","data":{"pairs":["BTCUSDT","ETHUSDT","BNBUSDT"]}}
+{"timestamp":"2026-03-25T16:18:53.379Z","type":"INFO","message":"Saldo inicial do dia definido","data":{"balance":285.3170693}}
+{"timestamp":"2026-03-25T16:18:54.195Z","type":"INFO","message":"Fear & Greed Index","data":{"value":14,"classification":"Extreme Fear"}}
+{"timestamp":"2026-03-25T16:18:54.330Z","type":"ERROR","message":"Erro ao obter notícias","data":{"message":"Request failed with status code 404"}}
+{"timestamp":"2026-03-25T16:18:54.331Z","type":"INFO","message":"Ciclo iniciado","data":{"balance":"285.32","fearGreed":14,"newsSignal":"NEUTRAL"}}
+{"timestamp":"2026-03-25T16:18:55.076Z","type":"INFO","message":"Análise BTCUSDT","data":{"interval":"1h","price":70882.96,"rsi":"57.34","signal":"WAIT","score":64}}
+{"timestamp":"2026-03-25T16:18:55.083Z","type":"INFO","message":"Análise BNBUSDT","data":{"interval":"1h","price":646.99,"rsi":"67.89","signal":"WAIT","score":64}}
+{"timestamp":"2026-03-25T16:18:55.541Z","type":"INFO","message":"Análise ETHUSDT","data":{"interval":"30m","price":2160.29,"rsi":"36.94","signal":"WAIT","score":88}}
+{"timestamp":"2026-03-25T16:18:56.242Z","type":"ERROR","message":"Erro no ciclo","data":{"message":"Request failed with status code 400"}}
+{"timestamp":"2026-03-25T16:22:36.777Z","type":"INFO","message":"Bot multi-par arrancado","data":{"pairs":["BTCUSDT","ETHUSDT","BNBUSDT"]}}

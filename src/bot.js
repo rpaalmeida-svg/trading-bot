@@ -102,16 +102,22 @@ async function getVolume(symbol) {
 }
 
 async function placeOrder(symbol, side, quantity) {
-  const timestamp = Date.now();
-  const params = { symbol, side, type: 'MARKET', quantity, timestamp };
-  const query = new URLSearchParams(params).toString();
-  const signature = sign(query);
-  const res = await axios.post(`${BASE_URL}/v3/order`, null, {
-    headers: { 'X-MBX-APIKEY': API_KEY },
-    params: { ...params, signature }
-  });
-  logger.trade(`Ordem executada: ${side} ${symbol}`, { symbol, quantity, orderId: res.data.orderId });
-  return res.data;
+  try {
+    const timestamp = Date.now();
+    const params = { symbol, side, type: 'MARKET', quantity, timestamp };
+    const query = new URLSearchParams(params).toString();
+    const signature = sign(query);
+    const res = await axios.post(`${BASE_URL}/v3/order`, null, {
+      headers: { 'X-MBX-APIKEY': API_KEY },
+      params: { ...params, signature }
+    });
+    logger.trade(`Ordem executada: ${side} ${symbol}`, { symbol, quantity, orderId: res.data.orderId });
+    return res.data;
+  } catch (err) {
+    const detail = err.response?.data || err.message;
+    logger.error(`Erro ao executar ordem ${side} ${symbol}`, { quantity, detail });
+    throw err;
+  }
 }
 
 async function analyzePair(symbol, sentiment) {
@@ -121,7 +127,6 @@ async function analyzePair(symbol, sentiment) {
     const volume = await getVolume(symbol);
     const pairConfig = PAIR_CONFIG[symbol];
 
-    // Usar estratégia com RSI específico do par
     const rsi = strategy.calculateRSI(prices, 14);
     const smaFast = strategy.calculateSMA(prices, 9);
     const smaSlow = strategy.calculateSMA(prices, 21);
@@ -151,22 +156,72 @@ async function analyzePair(symbol, sentiment) {
   }
 }
 
-async function runCycle() {
+function sendDashboardUpdate(balance, validAnalyses, sentiment, news, stats) {
   try {
-    const balance = await getBalance();
-    const sentiment = await getFearGreedIndex();
-    const news = await getNewsSentiment();
+    const balanceChange = initialBalance ? (balance - initialBalance).toFixed(2) : 0;
+    const balanceChangePct = initialBalance ? (((balance - initialBalance) / initialBalance) * 100).toFixed(2) : 0;
+    const btcData = validAnalyses.find(a => a.symbol === 'BTCUSDT');
+
+    updateDashboard({
+      balance: balance.toFixed(2),
+      initialBalance: initialBalance ? initialBalance.toFixed(2) : balance.toFixed(2),
+      balanceChange,
+      balanceChangePct,
+      price: btcData ? btcData.currentPrice.toFixed(2) : '0',
+      rsi: btcData && btcData.rsi ? btcData.rsi.toFixed(2) : 'N/A',
+      smaFast: btcData && btcData.smaFast ? btcData.smaFast.toFixed(2) : 'N/A',
+      smaSlow: btcData && btcData.smaSlow ? btcData.smaSlow.toFixed(2) : 'N/A',
+      signal: btcData ? btcData.signal : 'WAIT',
+      fearGreed: sentiment.value,
+      fearGreedLabel: sentiment.classification,
+      fearGreedEmoji: getEmoji(sentiment.value),
+      news: news.signal,
+      newsScore: news.sentimentScore,
+      newsTitles: news.recentTitles,
+      stats,
+      pairs: PAIRS.map(p => ({
+        symbol: p,
+        inPosition: positions[p].inPosition,
+        entryPrice: positions[p].entryPrice,
+        stopLoss: positions[p].stopLoss,
+        takeProfit: positions[p].takeProfit,
+        score: validAnalyses.find(a => a.symbol === p)?.score || 0,
+        rsi: validAnalyses.find(a => a.symbol === p)?.rsi?.toFixed(2) || 'N/A',
+        signal: validAnalyses.find(a => a.symbol === p)?.signal || 'WAIT',
+        currentPrice: validAnalyses.find(a => a.symbol === p)?.currentPrice || 0,
+        interval: PAIR_CONFIG[p].interval
+      }))
+    });
+  } catch (err) {
+    logger.error('Erro ao actualizar dashboard', { message: err.message });
+  }
+}
+
+async function runCycle() {
+  let balance = 0;
+  let sentiment = { value: 50, classification: 'Neutral', signal: 'NEUTRAL' };
+  let news = { signal: 'NEUTRAL', sentimentScore: 0, recentTitles: [] };
+  let validAnalyses = [];
+
+  try {
+    balance = await getBalance();
+    sentiment = await getFearGreedIndex();
+    news = await getNewsSentiment();
 
     logger.info(`Ciclo iniciado`, { balance: balance.toFixed(2), fearGreed: sentiment.value, newsSignal: news.signal });
 
     const shouldStop = risk.checkDailyLoss(balance);
     if (shouldStop) {
       await telegram.sendMessage(telegram.formatAlert('🛑 Limite de perda diária atingido — bot pausado!'));
+      sendDashboardUpdate(balance, [], sentiment, news, getStats());
       return;
     }
 
     const analyses = await Promise.all(PAIRS.map(symbol => analyzePair(symbol, sentiment)));
-    const validAnalyses = analyses.filter(a => a !== null);
+    validAnalyses = analyses.filter(a => a !== null);
+
+    // Actualizar dashboard logo após análise — mesmo antes de comprar/vender
+    sendDashboardUpdate(balance, validAnalyses, sentiment, news, getStats());
 
     // Gerir posições abertas
     for (const data of validAnalyses) {
@@ -174,40 +229,44 @@ async function runCycle() {
       if (!pos.inPosition) continue;
 
       const { currentPrice, symbol } = data;
-      const pairConfig = PAIR_CONFIG[symbol];
 
-      // Trailing Stop-Loss
       pos.stopLoss = risk.updateTrailingStop(currentPrice, pos.stopLoss);
       savePositions();
 
       if (currentPrice <= pos.stopLoss) {
-        await placeOrder(symbol, 'SELL', pos.quantity);
-        const trade = recordSell(symbol, currentPrice, 'STOP_LOSS');
-        const profit = trade ? trade.profit : 0;
-        await telegram.sendMessage(telegram.formatTrade('SELL', { symbol, price: currentPrice.toFixed(2), quantity: pos.quantity, profit: profit.toFixed(2) }));
-        await telegram.sendMessage(telegram.formatAlert(`🛑 Stop-Loss activado em ${symbol}!\nResultado: ${profit >= 0 ? '+' : ''}$${profit.toFixed(2)}`));
+        try {
+          await placeOrder(symbol, 'SELL', pos.quantity);
+          const trade = recordSell(symbol, currentPrice, 'STOP_LOSS');
+          const profit = trade ? trade.profit : 0;
+          await telegram.sendMessage(telegram.formatTrade('SELL', { symbol, price: currentPrice.toFixed(2), quantity: pos.quantity, profit: profit.toFixed(2) }));
+          await telegram.sendMessage(telegram.formatAlert(`🛑 Stop-Loss activado em ${symbol}!\nResultado: ${profit >= 0 ? '+' : ''}$${profit.toFixed(2)}`));
+        } catch (e) { logger.error(`Erro venda stop-loss ${symbol}`, { message: e.message }); }
         pos.inPosition = false; pos.entryPrice = null; pos.quantity = null;
         savePositions();
         continue;
       }
 
       if (currentPrice >= pos.takeProfit) {
-        await placeOrder(symbol, 'SELL', pos.quantity);
-        const trade = recordSell(symbol, currentPrice, 'TAKE_PROFIT');
-        const profit = trade ? trade.profit : 0;
-        await telegram.sendMessage(telegram.formatTrade('SELL', { symbol, price: currentPrice.toFixed(2), quantity: pos.quantity, profit: profit.toFixed(2) }));
-        await telegram.sendMessage(telegram.formatAlert(`🎯 Take-Profit atingido em ${symbol}!\nResultado: +$${profit.toFixed(2)}`));
+        try {
+          await placeOrder(symbol, 'SELL', pos.quantity);
+          const trade = recordSell(symbol, currentPrice, 'TAKE_PROFIT');
+          const profit = trade ? trade.profit : 0;
+          await telegram.sendMessage(telegram.formatTrade('SELL', { symbol, price: currentPrice.toFixed(2), quantity: pos.quantity, profit: profit.toFixed(2) }));
+          await telegram.sendMessage(telegram.formatAlert(`🎯 Take-Profit atingido em ${symbol}!\nResultado: +$${profit.toFixed(2)}`));
+        } catch (e) { logger.error(`Erro venda take-profit ${symbol}`, { message: e.message }); }
         pos.inPosition = false; pos.entryPrice = null; pos.quantity = null;
         savePositions();
         continue;
       }
 
       if (data.signal === 'SELL' && sentiment.signal === 'SELL' && news.signal === 'NEGATIVE') {
-        await placeOrder(symbol, 'SELL', pos.quantity);
-        const trade = recordSell(symbol, currentPrice, 'SIGNAL');
-        const profit = trade ? trade.profit : 0;
-        await telegram.sendMessage(telegram.formatTrade('SELL', { symbol, price: currentPrice.toFixed(2), quantity: pos.quantity, profit: profit.toFixed(2) }));
-        await telegram.sendMessage(telegram.formatAlert(`⚠️ Venda antecipada em ${symbol}\nResultado: ${profit >= 0 ? '+' : ''}$${profit.toFixed(2)}`));
+        try {
+          await placeOrder(symbol, 'SELL', pos.quantity);
+          const trade = recordSell(symbol, currentPrice, 'SIGNAL');
+          const profit = trade ? trade.profit : 0;
+          await telegram.sendMessage(telegram.formatTrade('SELL', { symbol, price: currentPrice.toFixed(2), quantity: pos.quantity, profit: profit.toFixed(2) }));
+          await telegram.sendMessage(telegram.formatAlert(`⚠️ Venda antecipada em ${symbol}\nResultado: ${profit >= 0 ? '+' : ''}$${profit.toFixed(2)}`));
+        } catch (e) { logger.error(`Erro venda signal ${symbol}`, { message: e.message }); }
         pos.inPosition = false; pos.entryPrice = null; pos.quantity = null;
         savePositions();
       }
@@ -218,7 +277,9 @@ async function runCycle() {
     const maxCapital = parseFloat(process.env.MAX_CAPITAL) || balance;
     const capitalPerPair = maxCapital / PAIRS.length;
 
-    if (openCount < PAIRS.length && balance > 10) {
+    if (capitalPerPair < 10) {
+      logger.warn('Capital insuficiente por par', { capitalPerPair });
+    } else if (openCount < PAIRS.length && balance > 10) {
       if (news.signal === 'NEGATIVE') {
         logger.warn('Notícias negativas — compras pausadas', { score: news.sentimentScore });
         await telegram.sendMessage(telegram.formatAlert(`📰 Notícias negativas (score: ${news.sentimentScore})\nCompras pausadas neste ciclo.`));
@@ -232,71 +293,53 @@ async function runCycle() {
 
           const pairConfig = PAIR_CONFIG[alloc.symbol];
           const safeAllocation = Math.min(alloc.allocation, capitalPerPair);
+
+          if (safeAllocation < 10) {
+            logger.warn(`Capital insuficiente para ${alloc.symbol}`, { safeAllocation });
+            continue;
+          }
+
           const qty = risk.calculatePositionSize(safeAllocation, alloc.currentPrice, alloc.symbol);
-          if (qty <= 0) continue;
+          if (qty <= 0) {
+            logger.warn(`Quantidade inválida para ${alloc.symbol}`, { qty, safeAllocation, price: alloc.currentPrice });
+            continue;
+          }
 
-          await placeOrder(alloc.symbol, 'BUY', qty);
-          pos.inPosition = true;
-          pos.entryPrice = alloc.currentPrice;
-          pos.stopLoss = alloc.currentPrice * (1 - pairConfig.stopLoss);
-          pos.takeProfit = alloc.currentPrice * (1 + pairConfig.takeProfit);
-          pos.quantity = qty;
-          savePositions();
+          try {
+            await placeOrder(alloc.symbol, 'BUY', qty);
+            pos.inPosition = true;
+            pos.entryPrice = alloc.currentPrice;
+            pos.stopLoss = alloc.currentPrice * (1 - pairConfig.stopLoss);
+            pos.takeProfit = alloc.currentPrice * (1 + pairConfig.takeProfit);
+            pos.quantity = qty;
+            savePositions();
 
-          recordBuy(alloc.symbol, alloc.currentPrice, qty, pos.stopLoss, pos.takeProfit);
+            recordBuy(alloc.symbol, alloc.currentPrice, qty, pos.stopLoss, pos.takeProfit);
 
-          const reason = getReason(alloc.score, alloc.rsi, sentiment.value);
-          await telegram.sendMessage(telegram.formatTrade('BUY', {
-            symbol: alloc.symbol,
-            price: alloc.currentPrice.toFixed(2),
-            quantity: qty,
-            stopLoss: pos.stopLoss.toFixed(2),
-            takeProfit: pos.takeProfit.toFixed(2)
-          }));
-          await telegram.sendMessage(telegram.formatAlert(
-            `🟢 Compra ${alloc.symbol}\nScore: ${alloc.score}/100\nTimeframe: ${PAIR_CONFIG[alloc.symbol].interval}\nRSI Buy: ${PAIR_CONFIG[alloc.symbol].rsiBuy}\nRazão: ${reason}\nNotícias: ${news.signal}\nCapital: $${safeAllocation.toFixed(2)}`
-          ));
+            const reason = getReason(alloc.score, alloc.rsi, sentiment.value);
+            await telegram.sendMessage(telegram.formatTrade('BUY', {
+              symbol: alloc.symbol,
+              price: alloc.currentPrice.toFixed(2),
+              quantity: qty,
+              stopLoss: pos.stopLoss.toFixed(2),
+              takeProfit: pos.takeProfit.toFixed(2)
+            }));
+            await telegram.sendMessage(telegram.formatAlert(
+              `🟢 Compra ${alloc.symbol}\nScore: ${alloc.score}/100\nTimeframe: ${pairConfig.interval}\nRSI Buy: ${pairConfig.rsiBuy}\nRazão: ${reason}\nNotícias: ${news.signal}\nCapital: $${safeAllocation.toFixed(2)}`
+            ));
+          } catch (e) {
+            logger.error(`Erro ao comprar ${alloc.symbol}`, { message: e.message });
+          }
         }
       }
     }
 
+    // Actualizar dashboard final com posições actualizadas
+    sendDashboardUpdate(balance, validAnalyses, sentiment, news, getStats());
+
     const stats = getStats();
     const balanceChange = initialBalance ? (balance - initialBalance).toFixed(2) : 0;
     const balanceChangePct = initialBalance ? (((balance - initialBalance) / initialBalance) * 100).toFixed(2) : 0;
-
-    const btcData = validAnalyses.find(a => a.symbol === 'BTCUSDT');
-    if (btcData) {
-      updateDashboard({
-        balance: balance.toFixed(2),
-        initialBalance: initialBalance ? initialBalance.toFixed(2) : balance.toFixed(2),
-        balanceChange,
-        balanceChangePct,
-        price: btcData.currentPrice.toFixed(2),
-        rsi: btcData.rsi ? btcData.rsi.toFixed(2) : 'N/A',
-        smaFast: btcData.smaFast ? btcData.smaFast.toFixed(2) : 'N/A',
-        smaSlow: btcData.smaSlow ? btcData.smaSlow.toFixed(2) : 'N/A',
-        signal: btcData.signal,
-        fearGreed: sentiment.value,
-        fearGreedLabel: sentiment.classification,
-        fearGreedEmoji: getEmoji(sentiment.value),
-        news: news.signal,
-        newsScore: news.sentimentScore,
-        newsTitles: news.recentTitles,
-        stats,
-        pairs: PAIRS.map(p => ({
-          symbol: p,
-          inPosition: positions[p].inPosition,
-          entryPrice: positions[p].entryPrice,
-          stopLoss: positions[p].stopLoss,
-          takeProfit: positions[p].takeProfit,
-          score: validAnalyses.find(a => a.symbol === p)?.score || 0,
-          rsi: validAnalyses.find(a => a.symbol === p)?.rsi?.toFixed(2) || 'N/A',
-          signal: validAnalyses.find(a => a.symbol === p)?.signal || 'WAIT',
-          currentPrice: validAnalyses.find(a => a.symbol === p)?.currentPrice || 0,
-          interval: PAIR_CONFIG[p].interval
-        }))
-      });
-    }
 
     await telegram.sendMessage(telegram.formatStatus({
       balance: balance.toFixed(2),
@@ -325,6 +368,10 @@ async function runCycle() {
   } catch (err) {
     logger.error('Erro no ciclo', { message: err.message });
     await telegram.sendMessage(telegram.formatAlert(`Erro no bot: ${err.message}`));
+    // Mesmo com erro — actualizar dashboard com o que temos
+    if (balance > 0) {
+      sendDashboardUpdate(balance, validAnalyses, sentiment, news, getStats());
+    }
   }
 }
 

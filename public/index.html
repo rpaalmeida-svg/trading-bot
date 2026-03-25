@@ -200,34 +200,33 @@
     }
 
     socket.on('update', (data) => {
+      if (!data || !data.balance) return;
+
       document.getElementById('balance').textContent = '$' + data.balance;
-      document.getElementById('price').textContent = '$' + data.price;
+      document.getElementById('price').textContent = '$' + (data.price || '—');
 
       const rsiEl = document.getElementById('rsi');
-      rsiEl.textContent = data.rsi;
+      rsiEl.textContent = data.rsi || '—';
       rsiEl.className = 'value ' + rsiColor(data.rsi);
 
       const fg = parseInt(data.fearGreed);
       const fgEl = document.getElementById('fg-value');
-      fgEl.textContent = fg;
+      fgEl.textContent = isNaN(fg) ? '—' : fg;
       fgEl.className = 'value ' + fgColor(fg);
       document.getElementById('fg-label').textContent = data.fearGreedLabel || '—';
-      document.getElementById('fg-marker').style.left = fg + '%';
+      if (!isNaN(fg)) document.getElementById('fg-marker').style.left = fg + '%';
 
       // Variação do saldo
       const change = parseFloat(data.balanceChange || 0);
       const changePct = parseFloat(data.balanceChangePct || 0);
       const changeEl = document.getElementById('balance-change');
       const changePctEl = document.getElementById('balance-change-pct');
-      changeEl.textContent = (change >= 0 ? '+' : '') + '$' + parseFloat(change).toFixed(2);
+      changeEl.textContent = (change >= 0 ? '+' : '') + '$' + change.toFixed(2);
       changeEl.style.color = change >= 0 ? '#3fb950' : '#f85149';
       changePctEl.textContent = (changePct >= 0 ? '+' : '') + changePct + '%';
       changePctEl.style.color = changePct >= 0 ? '#3fb950' : '#f85149';
       document.getElementById('initial-balance').textContent = '$' + (data.initialBalance || '—');
-
-      // Borda do card de variação
-      const varCard = document.querySelector('.variation-card');
-      varCard.style.borderColor = change >= 0 ? '#3fb950' : '#f85149';
+      document.querySelector('.variation-card').style.borderColor = change >= 0 ? '#3fb950' : '#f85149';
 
       // Notícias
       if (data.news) {
@@ -241,16 +240,12 @@
         document.getElementById('news-card-value').textContent = data.news;
         document.getElementById('news-card-value').style.color = newsColor;
         document.getElementById('news-card-score').textContent = 'score: ' + data.newsScore;
-
         if (data.newsTitles && data.newsTitles.length > 0) {
           document.getElementById('news-titles').innerHTML = data.newsTitles.map(t => `
-            <li class="news-item">
-              <span style="color:#58a6ff; flex-shrink:0;">📌</span>
-              <span>${t}</span>
-            </li>
+            <li class="news-item"><span style="color:#58a6ff;flex-shrink:0;">📌</span><span>${t}</span></li>
           `).join('');
         } else {
-          document.getElementById('news-titles').innerHTML = '<li style="color:#8b949e; font-size:0.85rem; padding:8px 0;">Sem notícias recentes</li>';
+          document.getElementById('news-titles').innerHTML = '<li style="color:#8b949e;font-size:0.85rem;padding:8px 0;">Sem notícias recentes</li>';
         }
       }
 
@@ -258,7 +253,7 @@
       const stats = data.stats || {};
       const pnl = stats.totalProfit || 0;
       const pnlEl = document.getElementById('pnl-total');
-      pnlEl.textContent = (pnl >= 0 ? '+' : '') + '$' + pnl.toFixed(2);
+      pnlEl.textContent = (pnl >= 0 ? '+' : '') + '$' + parseFloat(pnl).toFixed(2);
       pnlEl.className = 'value ' + (pnl >= 0 ? 'green' : 'red');
       document.getElementById('win-rate').textContent = (stats.winRate || 0) + '%';
       document.getElementById('total-trades').textContent = (stats.totalTrades || 0);
@@ -267,14 +262,13 @@
       document.getElementById('s-best').textContent = stats.bestTrade ? '+$' + stats.bestTrade.profit : '—';
       document.getElementById('s-worst').textContent = stats.worstTrade ? '$' + stats.worstTrade.profit : '—';
 
-      // Histórico de trades
       if (stats.recentTrades && stats.recentTrades.length > 0) {
         document.getElementById('trades-list').innerHTML = stats.recentTrades.map(t => `
           <div class="trade-row">
             <span style="color:#8b949e">${new Date(t.closeTimestamp).toLocaleString('pt-PT')}</span>
             <span style="font-weight:bold">${t.symbol.replace('USDT','/USDT')}</span>
-            <span>$${t.price.toFixed(2)} → $${t.closePrice.toFixed(2)}</span>
-            <span class="trade-badge ${t.profit >= 0 ? 'badge-win' : 'badge-loss'}">${t.profit >= 0 ? '+' : ''}$${t.profit.toFixed(2)}</span>
+            <span>$${parseFloat(t.price).toFixed(2)} → $${parseFloat(t.closePrice).toFixed(2)}</span>
+            <span class="trade-badge ${t.profit >= 0 ? 'badge-win' : 'badge-loss'}">${t.profit >= 0 ? '+' : ''}$${parseFloat(t.profit).toFixed(2)}</span>
           </div>
         `).join('');
       } else {
@@ -285,64 +279,63 @@
 
       // Pares
       if (data.pairs) {
-  document.getElementById('pairs-grid').innerHTML = data.pairs.map(p => {
-    let positionHTML = '';
-    if (p.inPosition) {
-      const pnl = p.entryPrice ? ((parseFloat(p.currentPrice) - parseFloat(p.entryPrice)) / parseFloat(p.entryPrice) * 100).toFixed(2) : 0;
-      const pnlColor = parseFloat(pnl) >= 0 ? 'green' : 'red';
-      positionHTML = `
-        <div class="pair-item">
-          <div class="plabel">Entrada</div>
-          <div class="pvalue">$${parseFloat(p.entryPrice).toFixed(2)}</div>
-        </div>
-        <div class="pair-item">
-          <div class="plabel">P&L Actual</div>
-          <div class="pvalue ${pnlColor}">${pnl}%</div>
-        </div>
-        <div class="pair-item">
-          <div class="plabel">Stop-Loss</div>
-          <div class="pvalue red">$${parseFloat(p.stopLoss).toFixed(2)}</div>
-        </div>
-        <div class="pair-item">
-          <div class="plabel">Take-Profit</div>
-          <div class="pvalue green">$${parseFloat(p.takeProfit).toFixed(2)}</div>
-        </div>`;
-    }
-
-    return `
-      <div class="pair-card ${p.inPosition ? 'active' : ''}">
-        <div class="pair-header">
-          <div class="pair-name">${p.symbol.replace('USDT', '/USDT')}</div>
-          <div class="pair-signal ${p.signal === 'BUY' ? 'green' : p.signal === 'SELL' ? 'red' : 'yellow'}">${p.signal || 'WAIT'}</div>
-        </div>
-        <div class="pair-rows">
-          <div class="pair-item">
-            <div class="plabel">RSI (14)</div>
-            <div class="pvalue ${rsiColor(p.rsi)}">${p.rsi}</div>
-          </div>
-          <div class="pair-item">
-            <div class="plabel">Score</div>
-            <div class="pvalue" style="color:${scoreColor(p.score)}">${p.score}/100</div>
-          </div>
-          <div class="pair-item">
-            <div class="plabel">Preço</div>
-            <div class="pvalue">$${parseFloat(p.currentPrice).toFixed(2)}</div>
-          </div>
-          <div class="pair-item">
-            <div class="plabel">Estado</div>
-            <div class="pvalue ${p.inPosition ? 'green' : ''}">${p.inPosition ? '🔵 Em posição' : '⚪️ Aguardar'}</div>
-          </div>
-          ${positionHTML}
-        </div>
-        <div class="score-bar">
-          <div class="score-fill" style="width:${p.score}%;background:${scoreColor(p.score)}"></div>
-        </div>
-      </div>`;
-  }).join('');
-}
+        document.getElementById('pairs-grid').innerHTML = data.pairs.map(p => {
+          let positionHTML = '';
+          if (p.inPosition && p.entryPrice) {
+            const pnlPct = ((parseFloat(p.currentPrice) - parseFloat(p.entryPrice)) / parseFloat(p.entryPrice) * 100).toFixed(2);
+            const pnlColor = parseFloat(pnlPct) >= 0 ? 'green' : 'red';
+            positionHTML = `
+              <div class="pair-item">
+                <div class="plabel">Entrada</div>
+                <div class="pvalue">$${parseFloat(p.entryPrice).toFixed(2)}</div>
+              </div>
+              <div class="pair-item">
+                <div class="plabel">P&L Actual</div>
+                <div class="pvalue ${pnlColor}">${pnlPct}%</div>
+              </div>
+              <div class="pair-item">
+                <div class="plabel">Stop-Loss</div>
+                <div class="pvalue red">$${parseFloat(p.stopLoss).toFixed(2)}</div>
+              </div>
+              <div class="pair-item">
+                <div class="plabel">Take-Profit</div>
+                <div class="pvalue green">$${parseFloat(p.takeProfit).toFixed(2)}</div>
+              </div>`;
+          }
+          return `
+            <div class="pair-card ${p.inPosition ? 'active' : ''}">
+              <div class="pair-header">
+                <div class="pair-name">${p.symbol.replace('USDT', '/USDT')}</div>
+                <div class="pair-signal ${p.signal === 'BUY' ? 'green' : p.signal === 'SELL' ? 'red' : 'yellow'}">${p.signal || 'WAIT'}</div>
+              </div>
+              <div class="pair-rows">
+                <div class="pair-item">
+                  <div class="plabel">RSI (14)</div>
+                  <div class="pvalue ${rsiColor(p.rsi)}">${p.rsi || '—'}</div>
+                </div>
+                <div class="pair-item">
+                  <div class="plabel">Score</div>
+                  <div class="pvalue" style="color:${scoreColor(p.score)}">${p.score}/100</div>
+                </div>
+                <div class="pair-item">
+                  <div class="plabel">Preço</div>
+                  <div class="pvalue">$${parseFloat(p.currentPrice || 0).toFixed(2)}</div>
+                </div>
+                <div class="pair-item">
+                  <div class="plabel">Estado</div>
+                  <div class="pvalue ${p.inPosition ? 'green' : ''}">${p.inPosition ? '🔵 Em posição' : '⚪️ Aguardar'}</div>
+                </div>
+                ${positionHTML}
+              </div>
+              <div class="score-bar">
+                <div class="score-fill" style="width:${p.score}%;background:${scoreColor(p.score)}"></div>
+              </div>
+            </div>`;
+        }).join('');
+      }
 
       const now = new Date().toLocaleTimeString('pt-PT');
-      logs.unshift({ time: now, msg: `BTC $${data.price} | RSI ${data.rsi} | F&G ${data.fearGreed} | Notícias ${data.news || '—'} | Variação ${(parseFloat(data.balanceChange) >= 0 ? '+' : '')}$${parseFloat(data.balanceChange || 0).toFixed(2)}` });
+      logs.unshift({ time: now, msg: `BTC $${data.price} | RSI ${data.rsi} | F&G ${data.fearGreed} | Notícias ${data.news || '—'} | Variação ${change >= 0 ? '+' : ''}$${change.toFixed(2)}` });
       if (logs.length > 50) logs.pop();
       document.getElementById('log-list').innerHTML = logs.map(l => `<li><span>${l.time}</span>${l.msg}</li>`).join('');
       document.getElementById('updated').textContent = 'Última actualização: ' + new Date().toLocaleString('pt-PT');
