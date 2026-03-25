@@ -46,5 +46,37 @@
     "closePrice": null,
     "closeTimestamp": null,
     "closeReason": null
+  },
+  {
+    "id": 1774452778909,
+    "symbol": "BTCUSDT",
+    "side": "BUY",
+    "price": 71000.62,
+    "quantity": 0.00446,
+    "stopLoss": 69935.61069999999,
+    "takeProfit": 73130.63859999999,
+    "timestamp": "2026-03-25T15:32:58.909Z",
+    "closed": false,
+    "profit": null,
+    "profitPercent": null,
+    "closePrice": null,
+    "closeTimestamp": null,
+    "closeReason": null
+  },
+  {
+    "id": 1774452779315,
+    "symbol": "ETHUSDT",
+    "side": "BUY",
+    "price": 2164.06,
+    "quantity": 0.1463,
+    "stopLoss": 2131.5991,
+    "takeProfit": 2228.9818,
+    "timestamp": "2026-03-25T15:32:59.315Z",
+    "closed": false,
+    "profit": null,
+    "profitPercent": null,
+    "closePrice": null,
+    "closeTimestamp": null,
+    "closeReason": null
   }
 ]

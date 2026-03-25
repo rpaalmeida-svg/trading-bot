@@ -21,11 +21,17 @@ function formatStatus(data) {
   const pairsInfo = data.pairs ? data.pairs.map(p => `
 ${p.signal === 'BUY' ? '🟢' : p.signal === 'SELL' ? '🔴' : '⚪️'} <b>${p.symbol.replace('USDT', '/USDT')}</b> — RSI: ${p.rsi} | Score: ${p.score}/100 | ${p.inPosition ? '🔵 Em posição' : 'Aguardar'}`).join('') : '';
 
+  const newsEmoji = data.news === 'POSITIVE' ? '📈' : data.news === 'NEGATIVE' ? '📉' : '📰';
+  const newsTitlesText = data.newsTitles && data.newsTitles.length > 0
+    ? '\n' + data.newsTitles.map(t => `• ${t.substring(0, 60)}...`).join('\n')
+    : '';
+
   return `
 🤖 <b>Trading Bot — Ponto de Situação</b>
 ─────────────────────
 💰 Saldo: <b>$${data.balance}</b>
 ${data.fearGreedEmoji} Fear &amp; Greed: <b>${data.fearGreed} — ${data.fearGreedLabel}</b>
+${newsEmoji} Notícias: <b>${data.news}</b> (score: ${data.newsScore})${newsTitlesText}
 ─────────────────────
 📊 <b>Pares</b>${pairsInfo}
 ─────────────────────

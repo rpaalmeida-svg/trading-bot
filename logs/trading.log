@@ -173,3 +173,20 @@
 {"timestamp":"2026-03-25T15:20:59.245Z","type":"INFO","message":"Ciclo iniciado","data":{"balance":"3765.72","fearGreed":14}}
 {"timestamp":"2026-03-25T15:20:59.246Z","type":"WARN","message":"LIMITE DE PERDA DIÁRIA ATINGIDO — bot pausado","data":{"dailyStartBalance":9050.3901285,"currentBalance":3765.7234601,"lossPercent":"58.39%"}}
 {"timestamp":"2026-03-25T15:24:02.146Z","type":"INFO","message":"Bot multi-par arrancado","data":{"pairs":["BTCUSDT","ETHUSDT","SOLUSDT"]}}
+{"timestamp":"2026-03-25T15:32:56.175Z","type":"INFO","message":"Bot multi-par arrancado","data":{"pairs":["BTCUSDT","ETHUSDT","SOLUSDT"]}}
+{"timestamp":"2026-03-25T15:32:56.696Z","type":"INFO","message":"Saldo inicial do dia definido","data":{"balance":1000}}
+{"timestamp":"2026-03-25T15:32:57.305Z","type":"INFO","message":"Fear & Greed Index","data":{"value":14,"classification":"Extreme Fear"}}
+{"timestamp":"2026-03-25T15:32:57.449Z","type":"ERROR","message":"Erro ao obter notícias","data":{"message":"Request failed with status code 404"}}
+{"timestamp":"2026-03-25T15:32:57.450Z","type":"INFO","message":"Ciclo iniciado","data":{"balance":"3133.22","fearGreed":14,"newsSignal":"NEUTRAL"}}
+{"timestamp":"2026-03-25T15:32:58.650Z","type":"INFO","message":"Análise de mercado","data":{"currentPrice":71000.61,"rsi":"32.84","smaFast":"71275.72","smaSlow":"71469.95"}}
+{"timestamp":"2026-03-25T15:32:58.651Z","type":"INFO","message":"Score calculado","data":{"rsiScore":100,"fgScore":100,"volScore":100,"score":"100.00"}}
+{"timestamp":"2026-03-25T15:32:58.652Z","type":"INFO","message":"Análise BTCUSDT","data":{"price":71000.62,"rsi":"32.84","signal":"WAIT","score":100}}
+{"timestamp":"2026-03-25T15:32:58.662Z","type":"INFO","message":"Análise de mercado","data":{"currentPrice":2164.06,"rsi":"33.32","smaFast":"2175.04","smaSlow":"2180.23"}}
+{"timestamp":"2026-03-25T15:32:58.663Z","type":"INFO","message":"Score calculado","data":{"rsiScore":100,"fgScore":100,"volScore":100,"score":"100.00"}}
+{"timestamp":"2026-03-25T15:32:58.663Z","type":"INFO","message":"Análise ETHUSDT","data":{"price":2164.06,"rsi":"33.32","signal":"WAIT","score":100}}
+{"timestamp":"2026-03-25T15:32:58.663Z","type":"INFO","message":"Análise de mercado","data":{"currentPrice":91.79,"rsi":"27.27","smaFast":"92.15","smaSlow":"92.56"}}
+{"timestamp":"2026-03-25T15:32:58.663Z","type":"INFO","message":"Score calculado","data":{"rsiScore":100,"fgScore":100,"volScore":100,"score":"100.00"}}
+{"timestamp":"2026-03-25T15:32:58.663Z","type":"INFO","message":"Análise SOLUSDT","data":{"price":91.79,"rsi":"27.27","signal":"WAIT","score":100}}
+{"timestamp":"2026-03-25T15:32:58.907Z","type":"TRADE","message":"Ordem executada: BUY BTCUSDT","data":{"symbol":"BTCUSDT","quantity":0.00446,"orderId":23413663}}
+{"timestamp":"2026-03-25T15:32:59.315Z","type":"TRADE","message":"Ordem executada: BUY ETHUSDT","data":{"symbol":"ETHUSDT","quantity":0.1463,"orderId":13809700}}
+{"timestamp":"2026-03-25T15:38:25.776Z","type":"INFO","message":"Bot multi-par arrancado","data":{"pairs":["BTCUSDT","ETHUSDT","SOLUSDT"]}}

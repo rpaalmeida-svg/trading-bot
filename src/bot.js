@@ -10,6 +10,7 @@ const telegram = require('./telegram');
 const { getFearGreedIndex, getEmoji } = require('./sentiment');
 const { PAIRS, calcScore, allocateCapital, getReason } = require('./portfolio');
 const { recordBuy, recordSell, getStats } = require('./history');
+const { getNewsSentiment } = require('./news');
 
 const BASE_URL = 'https://testnet.binance.vision/api';
 const API_KEY = process.env.BINANCE_API_KEY;
@@ -107,8 +108,9 @@ async function runCycle() {
   try {
     const balance = await getBalance();
     const sentiment = await getFearGreedIndex();
+    const news = await getNewsSentiment();
 
-    logger.info(`Ciclo iniciado`, { balance: balance.toFixed(2), fearGreed: sentiment.value });
+    logger.info(`Ciclo iniciado`, { balance: balance.toFixed(2), fearGreed: sentiment.value, newsSignal: news.signal });
 
     const shouldStop = risk.checkDailyLoss(balance);
     if (shouldStop) {
@@ -149,12 +151,13 @@ async function runCycle() {
         continue;
       }
 
-      if (analysis.signal === 'SELL' && sentiment.signal === 'SELL') {
+      // Venda antecipada se sinal técnico + sentimento + notícias negativos
+      if (analysis.signal === 'SELL' && sentiment.signal === 'SELL' && news.signal === 'NEGATIVE') {
         await placeOrder(symbol, 'SELL', pos.quantity);
         const trade = recordSell(symbol, currentPrice, 'SIGNAL');
         const profit = trade ? trade.profit : 0;
         await telegram.sendMessage(telegram.formatTrade('SELL', { symbol, price: currentPrice.toFixed(2), quantity: pos.quantity, profit: profit.toFixed(2) }));
-        await telegram.sendMessage(telegram.formatAlert(`⚠️ Venda antecipada em ${symbol}\nResultado: ${profit >= 0 ? '+' : ''}$${profit.toFixed(2)}`));
+        await telegram.sendMessage(telegram.formatAlert(`⚠️ Venda antecipada em ${symbol}\nRSI alto + Sentimento negativo + Notícias negativas\nResultado: ${profit >= 0 ? '+' : ''}$${profit.toFixed(2)}`));
         pos.inPosition = false; pos.entryPrice = null;
       }
     }
@@ -166,27 +169,33 @@ async function runCycle() {
     if (openCount < PAIRS.length && availableCapital > 10) {
       const maxCapital = parseFloat(process.env.MAX_CAPITAL) || availableCapital;
       const capitalToUse = Math.min(availableCapital, maxCapital);
-      const allocations = allocateCapital(validAnalyses, capitalToUse);
 
-      for (const alloc of allocations) {
-        const pos = positions[alloc.symbol];
-        if (pos.inPosition) continue;
+      if (news.signal === 'NEGATIVE') {
+        logger.warn('Notícias negativas — compras pausadas', { score: news.sentimentScore });
+        await telegram.sendMessage(telegram.formatAlert(`📰 Notícias negativas (score: ${news.sentimentScore})\nCompras pausadas neste ciclo.`));
+      } else {
+        const allocations = allocateCapital(validAnalyses, capitalToUse);
 
-        const qty = risk.calculatePositionSize(alloc.allocation, alloc.currentPrice, alloc.symbol);
-        if (qty <= 0) continue;
+        for (const alloc of allocations) {
+          const pos = positions[alloc.symbol];
+          if (pos.inPosition) continue;
 
-        await placeOrder(alloc.symbol, 'BUY', qty);
-        pos.inPosition = true;
-        pos.entryPrice = alloc.currentPrice;
-        pos.stopLoss = risk.calculateStopLoss(alloc.currentPrice);
-        pos.takeProfit = risk.calculateTakeProfit(alloc.currentPrice);
-        pos.quantity = qty;
+          const qty = risk.calculatePositionSize(alloc.allocation, alloc.currentPrice, alloc.symbol);
+          if (qty <= 0) continue;
 
-        recordBuy(alloc.symbol, alloc.currentPrice, qty, pos.stopLoss, pos.takeProfit);
+          await placeOrder(alloc.symbol, 'BUY', qty);
+          pos.inPosition = true;
+          pos.entryPrice = alloc.currentPrice;
+          pos.stopLoss = risk.calculateStopLoss(alloc.currentPrice);
+          pos.takeProfit = risk.calculateTakeProfit(alloc.currentPrice);
+          pos.quantity = qty;
 
-        const reason = getReason(alloc.score, alloc.rsi, sentiment.value);
-        await telegram.sendMessage(telegram.formatTrade('BUY', { symbol: alloc.symbol, price: alloc.currentPrice.toFixed(2), quantity: qty, stopLoss: pos.stopLoss.toFixed(2), takeProfit: pos.takeProfit.toFixed(2) }));
-        await telegram.sendMessage(telegram.formatAlert(`🟢 Compra ${alloc.symbol}\nScore: ${alloc.score}/100\nRazão: ${reason}\nCapital: $${alloc.allocation.toFixed(2)}`));
+          recordBuy(alloc.symbol, alloc.currentPrice, qty, pos.stopLoss, pos.takeProfit);
+
+          const reason = getReason(alloc.score, alloc.rsi, sentiment.value);
+          await telegram.sendMessage(telegram.formatTrade('BUY', { symbol: alloc.symbol, price: alloc.currentPrice.toFixed(2), quantity: qty, stopLoss: pos.stopLoss.toFixed(2), takeProfit: pos.takeProfit.toFixed(2) }));
+          await telegram.sendMessage(telegram.formatAlert(`🟢 Compra ${alloc.symbol}\nScore: ${alloc.score}/100\nRazão: ${reason}\nNotícias: ${news.signal} (${news.sentimentScore})\nCapital: $${alloc.allocation.toFixed(2)}`));
+        }
       }
     }
 
@@ -206,6 +215,9 @@ async function runCycle() {
         fearGreed: sentiment.value,
         fearGreedLabel: sentiment.classification,
         fearGreedEmoji: getEmoji(sentiment.value),
+        news: news.signal,
+        newsScore: news.sentimentScore,
+        newsTitles: news.recentTitles,
         stats,
         pairs: PAIRS.map(p => ({
           symbol: p,
@@ -230,6 +242,9 @@ async function runCycle() {
       totalProfit: stats.totalProfit,
       winRate: stats.winRate,
       totalTrades: stats.totalTrades,
+      news: news.signal,
+      newsScore: news.sentimentScore,
+      newsTitles: news.recentTitles,
       pairs: PAIRS.map(p => ({
         symbol: p,
         inPosition: positions[p].inPosition,

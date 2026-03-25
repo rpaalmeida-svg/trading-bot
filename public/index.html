@@ -47,6 +47,9 @@
     .trade-badge { padding: 2px 8px; border-radius: 6px; font-size: 0.75rem; font-weight: bold; }
     .badge-win { background: #0d3320; color: #3fb950; }
     .badge-loss { background: #3d1010; color: #f85149; }
+    .news-item { padding: 10px 0; border-bottom: 1px solid #21262d; font-size: 0.85rem; color: #8b949e; display: flex; align-items: flex-start; gap: 8px; }
+    .news-item:last-child { border-bottom: none; }
+    .news-signal-badge { padding: 3px 10px; border-radius: 6px; font-size: 0.75rem; font-weight: bold; white-space: nowrap; }
     .log-box { background: #161b22; border: 1px solid #30363d; border-radius: 12px; padding: 20px; }
     .log-box h2 { color: #58a6ff; margin-bottom: 16px; font-size: 0.9rem; text-transform: uppercase; letter-spacing: 1px; }
     #log-list { list-style: none; max-height: 200px; overflow-y: auto; }
@@ -86,6 +89,11 @@
       <div class="sub" id="fg-label">—</div>
     </div>
     <div class="card">
+      <div class="label">Notícias</div>
+      <div class="value" id="news-card-value">—</div>
+      <div class="sub" id="news-card-score">score: —</div>
+    </div>
+    <div class="card">
       <div class="label">P&L Total</div>
       <div class="value" id="pnl-total">—</div>
     </div>
@@ -97,6 +105,18 @@
       <div class="label">Trades</div>
       <div class="value" id="total-trades">—</div>
     </div>
+  </div>
+
+  <div class="section">
+    <h2>📰 Notícias — Sentimento do Mercado</h2>
+    <div style="display:flex; align-items:center; gap:16px; margin-bottom:16px;">
+      <div style="font-size:2rem;" id="news-emoji">📰</div>
+      <div>
+        <div style="font-size:1.2rem; font-weight:bold;" id="news-signal">A aguardar...</div>
+        <div style="font-size:0.85rem; color:#8b949e;">Score: <span id="news-score">—</span></div>
+      </div>
+    </div>
+    <ul id="news-titles" style="list-style:none; padding:0;"></ul>
   </div>
 
   <div class="section">
@@ -184,6 +204,31 @@
       document.getElementById('fg-label').textContent = data.fearGreedLabel || '—';
       document.getElementById('fg-marker').style.left = fg + '%';
 
+      // Notícias
+      if (data.news) {
+        const newsEmoji = data.news === 'POSITIVE' ? '📈' : data.news === 'NEGATIVE' ? '📉' : '📰';
+        const newsColor = data.news === 'POSITIVE' ? '#3fb950' : data.news === 'NEGATIVE' ? '#f85149' : '#d29922';
+        document.getElementById('news-emoji').textContent = newsEmoji;
+        const newsSignalEl = document.getElementById('news-signal');
+        newsSignalEl.textContent = data.news;
+        newsSignalEl.style.color = newsColor;
+        document.getElementById('news-score').textContent = data.newsScore;
+        document.getElementById('news-card-value').textContent = data.news;
+        document.getElementById('news-card-value').style.color = newsColor;
+        document.getElementById('news-card-score').textContent = 'score: ' + data.newsScore;
+
+        if (data.newsTitles && data.newsTitles.length > 0) {
+          document.getElementById('news-titles').innerHTML = data.newsTitles.map(t => `
+            <li class="news-item">
+              <span style="color:#58a6ff; flex-shrink:0;">📌</span>
+              <span>${t}</span>
+            </li>
+          `).join('');
+        } else {
+          document.getElementById('news-titles').innerHTML = '<li style="color:#8b949e; font-size:0.85rem; padding:8px 0;">Sem notícias recentes</li>';
+        }
+      }
+
       // Stats
       const stats = data.stats || {};
       const pnl = stats.totalProfit || 0;
@@ -256,7 +301,7 @@
       }
 
       const now = new Date().toLocaleTimeString('pt-PT');
-      logs.unshift({ time: now, msg: `BTC $${data.price} | RSI ${data.rsi} | F&G ${data.fearGreed} | P&L ${data.stats ? (data.stats.totalProfit >= 0 ? '+' : '') + '$' + data.stats.totalProfit : '—'}` });
+      logs.unshift({ time: now, msg: `BTC $${data.price} | RSI ${data.rsi} | F&G ${data.fearGreed} | Notícias ${data.news || '—'} | P&L ${data.stats ? (data.stats.totalProfit >= 0 ? '+' : '') + '$' + data.stats.totalProfit : '—'}` });
       if (logs.length > 50) logs.pop();
       document.getElementById('log-list').innerHTML = logs.map(l => `<li><span>${l.time}</span>${l.msg}</li>`).join('');
       document.getElementById('updated').textContent = 'Última actualização: ' + new Date().toLocaleString('pt-PT');
