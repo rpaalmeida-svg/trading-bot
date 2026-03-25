@@ -8,3 +8,5 @@
 {"timestamp":"2026-03-25T11:32:13.002Z","type":"INFO","message":"Saldo inicial do dia definido","data":{"balance":10000}}
 {"timestamp":"2026-03-25T11:32:13.751Z","type":"INFO","message":"Análise de mercado","data":{"currentPrice":71975.12,"rsi":"82.42","smaFast":"71534.20","smaSlow":"71310.80"}}
 {"timestamp":"2026-03-25T11:32:13.752Z","type":"INFO","message":"Saldo: $10000.00 | Preço BTC: $71911.32","data":null}
+{"timestamp":"2026-03-25T11:47:13.845Z","type":"INFO","message":"Análise de mercado","data":{"currentPrice":71794,"rsi":"70.70","smaFast":"71574.46","smaSlow":"71330.67"}}
+{"timestamp":"2026-03-25T11:47:13.848Z","type":"INFO","message":"Saldo: $10000.00 | Preço BTC: $71794.00","data":null}

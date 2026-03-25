@@ -42,9 +42,10 @@ function calculateTakeProfit(entryPrice) {
 }
 
 function calculatePositionSize(balance, price) {
-  const available = balance * RISK_CONFIG.maxPositionSize;
+  const maxCapital = parseFloat(process.env.MAX_CAPITAL) || balance;
+  const available = Math.min(balance, maxCapital) * RISK_CONFIG.maxPositionSize;
   const quantity = available / price;
-  return Math.floor(quantity * 100000) / 100000; // arredonda para baixo
+  return Math.floor(quantity * 100000) / 100000;
 }
 
 module.exports = {
