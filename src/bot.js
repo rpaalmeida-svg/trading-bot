@@ -16,6 +16,8 @@ const { initDB, saveState, loadState } = require('./database');
 const BASE_URL = 'https://testnet.binance.vision/api';
 const API_KEY = process.env.BINANCE_API_KEY;
 const SECRET_KEY = process.env.BINANCE_SECRET_KEY;
+const COOLDOWN_MS = 2 * 60 * 60 * 1000; // 2 horas após stop-loss
+const MIN_SCORE_TO_BUY = 75; // Aumentado de 55 para 75
 
 let initialBalance = null;
 
@@ -26,7 +28,8 @@ PAIRS.forEach(p => {
     entryPrice: null,
     stopLoss: null,
     takeProfit: null,
-    quantity: null
+    quantity: null,
+    lastStopLoss: null
   };
 });
 
@@ -169,7 +172,8 @@ function sendDashboardUpdate(balance, validAnalyses, sentiment, news, stats) {
         rsi: validAnalyses.find(a => a.symbol === p)?.rsi?.toFixed(2) || 'N/A',
         signal: validAnalyses.find(a => a.symbol === p)?.signal || 'WAIT',
         currentPrice: validAnalyses.find(a => a.symbol === p)?.currentPrice || 0,
-        interval: PAIR_CONFIG[p].interval
+        interval: PAIR_CONFIG[p].interval,
+        cooldownRestante: positions[p].lastStopLoss ? Math.max(0, Math.round((COOLDOWN_MS - (Date.now() - positions[p].lastStopLoss)) / 60000)) : 0
       }))
     });
   } catch (err) {
@@ -218,9 +222,12 @@ async function runCycle() {
           const trade = recordSell(symbol, currentPrice, 'STOP_LOSS');
           const profit = trade ? trade.profit : 0;
           await telegram.sendMessage(telegram.formatTrade('SELL', { symbol, price: currentPrice.toFixed(2), quantity: pos.quantity, profit: profit.toFixed(2) }));
-          await telegram.sendMessage(telegram.formatAlert(`🛑 Stop-Loss activado em ${symbol}!\nResultado: ${profit >= 0 ? '+' : ''}$${profit.toFixed(2)}`));
+          await telegram.sendMessage(telegram.formatAlert(`🛑 Stop-Loss activado em ${symbol}!\nResultado: ${profit >= 0 ? '+' : ''}$${profit.toFixed(2)}\n⏳ Cooldown de 2h activo — próxima compra bloqueada.`));
         } catch (e) { logger.error(`Erro venda stop-loss ${symbol}`, { message: e.message }); }
-        pos.inPosition = false; pos.entryPrice = null; pos.quantity = null;
+        pos.inPosition = false;
+        pos.entryPrice = null;
+        pos.quantity = null;
+        pos.lastStopLoss = Date.now(); // ← cooldown começa aqui
         await persistPositions();
         continue;
       }
@@ -233,7 +240,10 @@ async function runCycle() {
           await telegram.sendMessage(telegram.formatTrade('SELL', { symbol, price: currentPrice.toFixed(2), quantity: pos.quantity, profit: profit.toFixed(2) }));
           await telegram.sendMessage(telegram.formatAlert(`🎯 Take-Profit atingido em ${symbol}!\nResultado: +$${profit.toFixed(2)}`));
         } catch (e) { logger.error(`Erro venda take-profit ${symbol}`, { message: e.message }); }
-        pos.inPosition = false; pos.entryPrice = null; pos.quantity = null;
+        pos.inPosition = false;
+        pos.entryPrice = null;
+        pos.quantity = null;
+        pos.lastStopLoss = null; // ← take-profit não tem cooldown
         await persistPositions();
         continue;
       }
@@ -246,7 +256,10 @@ async function runCycle() {
           await telegram.sendMessage(telegram.formatTrade('SELL', { symbol, price: currentPrice.toFixed(2), quantity: pos.quantity, profit: profit.toFixed(2) }));
           await telegram.sendMessage(telegram.formatAlert(`⚠️ Venda antecipada em ${symbol}\nResultado: ${profit >= 0 ? '+' : ''}$${profit.toFixed(2)}`));
         } catch (e) { logger.error(`Erro venda signal ${symbol}`, { message: e.message }); }
-        pos.inPosition = false; pos.entryPrice = null; pos.quantity = null;
+        pos.inPosition = false;
+        pos.entryPrice = null;
+        pos.quantity = null;
+        pos.lastStopLoss = Date.now(); // ← venda antecipada também tem cooldown
         await persistPositions();
       }
     }
@@ -255,6 +268,7 @@ async function runCycle() {
     const openCount = PAIRS.filter(p => positions[p].inPosition).length;
     const maxCapital = parseFloat(process.env.MAX_CAPITAL) || balance;
     const capitalPerPair = maxCapital / PAIRS.length;
+    const now = Date.now();
 
     if (capitalPerPair < 10) {
       logger.warn('Capital insuficiente por par', { capitalPerPair });
@@ -263,7 +277,28 @@ async function runCycle() {
         logger.warn('Notícias negativas — compras pausadas', { score: news.sentimentScore });
         await telegram.sendMessage(telegram.formatAlert(`📰 Notícias negativas (score: ${news.sentimentScore})\nCompras pausadas neste ciclo.`));
       } else {
-        const pairsWithoutPosition = validAnalyses.filter(a => !positions[a.symbol].inPosition);
+        const pairsWithoutPosition = validAnalyses.filter(a => {
+          if (positions[a.symbol].inPosition) return false;
+
+          // Verificar cooldown após stop-loss
+          if (positions[a.symbol].lastStopLoss) {
+            const elapsed = now - positions[a.symbol].lastStopLoss;
+            if (elapsed < COOLDOWN_MS) {
+              const minutosRestantes = Math.round((COOLDOWN_MS - elapsed) / 60000);
+              logger.info(`Cooldown activo para ${a.symbol}`, { minutosRestantes });
+              return false;
+            }
+          }
+
+          // Verificar score mínimo
+          if (a.score < MIN_SCORE_TO_BUY) {
+            logger.info(`Score insuficiente para ${a.symbol}`, { score: a.score, minimo: MIN_SCORE_TO_BUY });
+            return false;
+          }
+
+          return true;
+        });
+
         const allocations = allocateCapital(pairsWithoutPosition, capitalPerPair * pairsWithoutPosition.length);
 
         for (const alloc of allocations) {
@@ -285,6 +320,7 @@ async function runCycle() {
             pos.stopLoss = alloc.currentPrice * (1 - pairConfig.stopLoss);
             pos.takeProfit = alloc.currentPrice * (1 + pairConfig.takeProfit);
             pos.quantity = qty;
+            pos.lastStopLoss = null;
             await persistPositions();
 
             recordBuy(alloc.symbol, alloc.currentPrice, qty, pos.stopLoss, pos.takeProfit);
@@ -381,6 +417,8 @@ BTC → 1h | RSI 35/65
 ETH → 30min | RSI 35/65
 BNB → 1h | RSI 40/60
 Stop-Loss: 2.5% | Take-Profit: 5%
+Score mínimo: ${MIN_SCORE_TO_BUY}/100
+Cooldown após SL: 2 horas
 Posições em memória: ${PAIRS.filter(p => positions[p].inPosition).join(', ') || 'nenhuma'}`);
 
   runCycle();
