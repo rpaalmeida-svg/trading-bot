@@ -16,8 +16,8 @@ const { initDB, saveState, loadState } = require('./database');
 const BASE_URL = 'https://testnet.binance.vision/api';
 const API_KEY = process.env.BINANCE_API_KEY;
 const SECRET_KEY = process.env.BINANCE_SECRET_KEY;
-const COOLDOWN_MS = 2 * 60 * 60 * 1000; // 2 horas após stop-loss
-const MIN_SCORE_TO_BUY = 75; // Aumentado de 55 para 75
+const COOLDOWN_MS = 2 * 60 * 60 * 1000;
+const MIN_SCORE_TO_BUY = 75;
 
 let initialBalance = null;
 
@@ -74,9 +74,22 @@ async function getPrice(symbol) {
 async function getPriceHistory(symbol) {
   const config = PAIR_CONFIG[symbol];
   const res = await axios.get(`${BASE_URL}/v3/klines`, {
-    params: { symbol, interval: config.interval, limit: 50 }
+    params: { symbol, interval: config.interval, limit: 100 }
   });
   return res.data.map(k => parseFloat(k[4]));
+}
+
+// Buscar dados de 4h para confirmação de tendência
+async function getPriceHistory4h(symbol) {
+  try {
+    const res = await axios.get(`${BASE_URL}/v3/klines`, {
+      params: { symbol, interval: '4h', limit: 100 }
+    });
+    return res.data.map(k => parseFloat(k[4]));
+  } catch (err) {
+    logger.error(`Erro ao buscar 4h para ${symbol}`, { message: err.message });
+    return null;
+  }
 }
 
 async function getVolume(symbol) {
@@ -106,6 +119,7 @@ async function placeOrder(symbol, side, quantity) {
 async function analyzePair(symbol, sentiment) {
   try {
     const prices = await getPriceHistory(symbol);
+    const prices4h = await getPriceHistory4h(symbol);
     const currentPrice = await getPrice(symbol);
     const volume = await getVolume(symbol);
     const pairConfig = PAIR_CONFIG[symbol];
@@ -113,11 +127,19 @@ async function analyzePair(symbol, sentiment) {
     const rsi = strategy.calculateRSI(prices, 14);
     const smaFast = strategy.calculateSMA(prices, 9);
     const smaSlow = strategy.calculateSMA(prices, 21);
+    const macd = strategy.calculateMACD(prices);
+    const trend4h = strategy.getTrend4h(prices4h);
 
+    // Sinal baseado em RSI + SMA + MACD + tendência 4h
     let signal = 'WAIT';
+    const macdConfirma = macd ? macd.histogram > 0 || macd.macdLine > macd.signalLine : true;
+
     if (rsi && smaFast && smaSlow) {
-      if (rsi < pairConfig.rsiBuy && smaFast > smaSlow) signal = 'BUY';
-      else if (rsi > pairConfig.rsiSell && smaFast < smaSlow) signal = 'SELL';
+      if (rsi < pairConfig.rsiBuy && smaFast > smaSlow && macdConfirma && trend4h !== 'BEARISH') {
+        signal = 'BUY';
+      } else if (rsi > pairConfig.rsiSell && smaFast < smaSlow) {
+        signal = 'SELL';
+      }
     }
 
     const avgVolume = volume / 24;
@@ -128,11 +150,17 @@ async function analyzePair(symbol, sentiment) {
       interval: pairConfig.interval,
       price: currentPrice,
       rsi: rsi ? rsi.toFixed(2) : 'N/A',
+      macdHistogram: macd ? macd.histogram.toFixed(4) : 'N/A',
+      trend4h,
       signal,
       score
     });
 
-    return { symbol, currentPrice, analysis: { rsi, smaFast, smaSlow, signal }, score, signal, rsi, smaFast, smaSlow, volume };
+    return {
+      symbol, currentPrice, score, signal, rsi, smaFast, smaSlow,
+      macd, trend4h, volume,
+      analysis: { rsi, smaFast, smaSlow, signal }
+    };
   } catch (err) {
     logger.error(`Erro ao analisar ${symbol}`, { message: err.message });
     return null;
@@ -173,6 +201,7 @@ function sendDashboardUpdate(balance, validAnalyses, sentiment, news, stats) {
         signal: validAnalyses.find(a => a.symbol === p)?.signal || 'WAIT',
         currentPrice: validAnalyses.find(a => a.symbol === p)?.currentPrice || 0,
         interval: PAIR_CONFIG[p].interval,
+        trend4h: validAnalyses.find(a => a.symbol === p)?.trend4h || 'N/A',
         cooldownRestante: positions[p].lastStopLoss ? Math.max(0, Math.round((COOLDOWN_MS - (Date.now() - positions[p].lastStopLoss)) / 60000)) : 0
       }))
     });
@@ -222,12 +251,10 @@ async function runCycle() {
           const trade = recordSell(symbol, currentPrice, 'STOP_LOSS');
           const profit = trade ? trade.profit : 0;
           await telegram.sendMessage(telegram.formatTrade('SELL', { symbol, price: currentPrice.toFixed(2), quantity: pos.quantity, profit: profit.toFixed(2) }));
-          await telegram.sendMessage(telegram.formatAlert(`🛑 Stop-Loss activado em ${symbol}!\nResultado: ${profit >= 0 ? '+' : ''}$${profit.toFixed(2)}\n⏳ Cooldown de 2h activo — próxima compra bloqueada.`));
+          await telegram.sendMessage(telegram.formatAlert(`🛑 Stop-Loss activado em ${symbol}!\nResultado: ${profit >= 0 ? '+' : ''}$${profit.toFixed(2)}\n⏳ Cooldown de 2h activo.`));
         } catch (e) { logger.error(`Erro venda stop-loss ${symbol}`, { message: e.message }); }
-        pos.inPosition = false;
-        pos.entryPrice = null;
-        pos.quantity = null;
-        pos.lastStopLoss = Date.now(); // ← cooldown começa aqui
+        pos.inPosition = false; pos.entryPrice = null; pos.quantity = null;
+        pos.lastStopLoss = Date.now();
         await persistPositions();
         continue;
       }
@@ -240,10 +267,8 @@ async function runCycle() {
           await telegram.sendMessage(telegram.formatTrade('SELL', { symbol, price: currentPrice.toFixed(2), quantity: pos.quantity, profit: profit.toFixed(2) }));
           await telegram.sendMessage(telegram.formatAlert(`🎯 Take-Profit atingido em ${symbol}!\nResultado: +$${profit.toFixed(2)}`));
         } catch (e) { logger.error(`Erro venda take-profit ${symbol}`, { message: e.message }); }
-        pos.inPosition = false;
-        pos.entryPrice = null;
-        pos.quantity = null;
-        pos.lastStopLoss = null; // ← take-profit não tem cooldown
+        pos.inPosition = false; pos.entryPrice = null; pos.quantity = null;
+        pos.lastStopLoss = null;
         await persistPositions();
         continue;
       }
@@ -256,10 +281,8 @@ async function runCycle() {
           await telegram.sendMessage(telegram.formatTrade('SELL', { symbol, price: currentPrice.toFixed(2), quantity: pos.quantity, profit: profit.toFixed(2) }));
           await telegram.sendMessage(telegram.formatAlert(`⚠️ Venda antecipada em ${symbol}\nResultado: ${profit >= 0 ? '+' : ''}$${profit.toFixed(2)}`));
         } catch (e) { logger.error(`Erro venda signal ${symbol}`, { message: e.message }); }
-        pos.inPosition = false;
-        pos.entryPrice = null;
-        pos.quantity = null;
-        pos.lastStopLoss = Date.now(); // ← venda antecipada também tem cooldown
+        pos.inPosition = false; pos.entryPrice = null; pos.quantity = null;
+        pos.lastStopLoss = Date.now();
         await persistPositions();
       }
     }
@@ -275,12 +298,12 @@ async function runCycle() {
     } else if (openCount < PAIRS.length && balance > 10) {
       if (news.signal === 'NEGATIVE') {
         logger.warn('Notícias negativas — compras pausadas', { score: news.sentimentScore });
-        await telegram.sendMessage(telegram.formatAlert(`📰 Notícias negativas (score: ${news.sentimentScore})\nCompras pausadas neste ciclo.`));
+        await telegram.sendMessage(telegram.formatAlert(`📰 Notícias negativas — compras pausadas.`));
       } else {
         const pairsWithoutPosition = validAnalyses.filter(a => {
           if (positions[a.symbol].inPosition) return false;
 
-          // Verificar cooldown após stop-loss
+          // Cooldown após stop-loss
           if (positions[a.symbol].lastStopLoss) {
             const elapsed = now - positions[a.symbol].lastStopLoss;
             if (elapsed < COOLDOWN_MS) {
@@ -290,9 +313,15 @@ async function runCycle() {
             }
           }
 
-          // Verificar score mínimo
+          // Score mínimo
           if (a.score < MIN_SCORE_TO_BUY) {
             logger.info(`Score insuficiente para ${a.symbol}`, { score: a.score, minimo: MIN_SCORE_TO_BUY });
+            return false;
+          }
+
+          // Tendência 4h — bloquear se BEARISH
+          if (a.trend4h === 'BEARISH') {
+            logger.info(`Tendência 4h BEARISH — compra bloqueada para ${a.symbol}`);
             return false;
           }
 
@@ -307,7 +336,6 @@ async function runCycle() {
 
           const pairConfig = PAIR_CONFIG[alloc.symbol];
           const safeAllocation = Math.min(alloc.allocation, capitalPerPair);
-
           if (safeAllocation < 10) continue;
 
           const qty = risk.calculatePositionSize(safeAllocation, alloc.currentPrice, alloc.symbol);
@@ -334,7 +362,7 @@ async function runCycle() {
               takeProfit: pos.takeProfit.toFixed(2)
             }));
             await telegram.sendMessage(telegram.formatAlert(
-              `🟢 Compra ${alloc.symbol}\nScore: ${alloc.score}/100\nTimeframe: ${pairConfig.interval}\nRSI Buy: ${pairConfig.rsiBuy}\nRazão: ${reason}\nNotícias: ${news.signal}\nCapital: $${safeAllocation.toFixed(2)}`
+              `🟢 Compra ${alloc.symbol}\nScore: ${alloc.score}/100\nTendência 4h: ${alloc.trend4h}\nMACD: ${alloc.macd ? (alloc.macd.histogram > 0 ? '📈 Positivo' : '📉 Negativo') : 'N/A'}\nTimeframe: ${pairConfig.interval}\nRSI Buy: ${pairConfig.rsiBuy}\nRazão: ${reason}\nNotícias: ${news.signal}\nCapital: $${safeAllocation.toFixed(2)}`
             ));
           } catch (e) {
             logger.error(`Erro ao comprar ${alloc.symbol}`, { message: e.message });
@@ -369,6 +397,7 @@ async function runCycle() {
         score: validAnalyses.find(a => a.symbol === p)?.score || 0,
         rsi: validAnalyses.find(a => a.symbol === p)?.rsi?.toFixed(2) || 'N/A',
         signal: validAnalyses.find(a => a.symbol === p)?.signal || 'WAIT',
+        trend4h: validAnalyses.find(a => a.symbol === p)?.trend4h || 'N/A',
         interval: PAIR_CONFIG[p].interval
       }))
     }));
@@ -419,6 +448,7 @@ BNB → 1h | RSI 40/60
 Stop-Loss: 2.5% | Take-Profit: 5%
 Score mínimo: ${MIN_SCORE_TO_BUY}/100
 Cooldown após SL: 2 horas
+Confirmação: MACD + Tendência 4h
 Posições em memória: ${PAIRS.filter(p => positions[p].inPosition).join(', ') || 'nenhuma'}`);
 
   runCycle();

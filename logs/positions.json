@@ -8,10 +8,10 @@
   },
   "ETHUSDT": {
     "inPosition": true,
-    "entryPrice": 2116.45,
-    "stopLoss": 2098.63056,
-    "takeProfit": 2222.2725,
-    "quantity": 0.1496
+    "entryPrice": 2079.88,
+    "stopLoss": 2057.37168,
+    "takeProfit": 2183.8740000000003,
+    "quantity": 0.1446
   },
   "BNBUSDT": {
     "inPosition": true,
