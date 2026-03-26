@@ -31,7 +31,8 @@ PAIRS.forEach(p => {
     stopLoss: null,
     takeProfit: null,
     quantity: null,
-    lastStopLoss: null
+    lastStopLoss: null,
+    highestPrice: null
   };
 });
 
@@ -228,6 +229,7 @@ function sendDashboardUpdate(balance, validAnalyses, sentiment, news, stats) {
         atrPct: validAnalyses.find(a => a.symbol === p)?.atrData?.atrPct?.toFixed(2) || 'N/A',
         bbPercentB: validAnalyses.find(a => a.symbol === p)?.bb?.percentB?.toFixed(3) || 'N/A',
         candlePattern: validAnalyses.find(a => a.symbol === p)?.candlePattern || 'NONE',
+        highestPrice: positions[p].highestPrice,
         cooldownRestante: positions[p].lastStopLoss ? Math.max(0, Math.round((COOLDOWN_MS - (Date.now() - positions[p].lastStopLoss)) / 60000)) : 0
       }))
     });
@@ -324,12 +326,20 @@ async function runCycle() {
 
     sendDashboardUpdate(balance, validAnalyses, sentiment, news, getStats());
 
+    // Gerir posições abertas
     for (const data of validAnalyses) {
       const pos = positions[data.symbol];
       if (!pos.inPosition) continue;
 
       const { currentPrice, symbol, atrData } = data;
 
+      // Actualizar preço máximo desde a entrada
+      if (!pos.highestPrice || currentPrice > pos.highestPrice) {
+        pos.highestPrice = currentPrice;
+        await persistPositions();
+      }
+
+      // Trailing Stop-Loss adaptativo
       const trailingPct = atrData && atrData.atrPct > 0
         ? Math.min(Math.max(atrData.atrPct * 1.5, 1.5), 4.0) / 100
         : 0.025;
@@ -339,6 +349,32 @@ async function runCycle() {
         await persistPositions();
       }
 
+      // Trailing Take-Profit — activa após +3% de ganho, vende se recuar 4% do máximo
+      const gainFromEntry = pos.entryPrice ? (pos.highestPrice - pos.entryPrice) / pos.entryPrice : 0;
+      const trailingTPActive = gainFromEntry >= 0.03;
+      const trailingTPStop = pos.highestPrice * 0.96;
+
+      if (trailingTPActive && currentPrice <= trailingTPStop) {
+        try {
+          await placeOrder(symbol, 'SELL', pos.quantity);
+          const trade = recordSell(symbol, currentPrice, 'TRAILING_TP');
+          const profit = trade ? trade.profit : 0;
+          const maxGainPct = (gainFromEntry * 100).toFixed(2);
+          await telegram.sendMessage(telegram.formatTrade('SELL', { symbol, price: currentPrice.toFixed(2), quantity: pos.quantity, profit: profit.toFixed(2) }));
+          await telegram.sendMessage(telegram.formatAlert(
+            `🎯 Trailing Take-Profit em ${symbol}!\n` +
+            `Máximo atingido: $${pos.highestPrice.toFixed(2)} (+${maxGainPct}%)\n` +
+            `Vendido a: $${currentPrice.toFixed(2)}\n` +
+            `Resultado: +$${profit.toFixed(2)}`
+          ));
+        } catch (e) { logger.error(`Erro trailing TP ${symbol}`, { message: e.message }); }
+        pos.inPosition = false; pos.entryPrice = null; pos.quantity = null;
+        pos.highestPrice = null; pos.lastStopLoss = null;
+        await persistPositions();
+        continue;
+      }
+
+      // Stop-Loss fixo
       if (currentPrice <= pos.stopLoss) {
         try {
           await placeOrder(symbol, 'SELL', pos.quantity);
@@ -348,11 +384,12 @@ async function runCycle() {
           await telegram.sendMessage(telegram.formatAlert(`🛑 Stop-Loss activado em ${symbol}!\nResultado: ${profit >= 0 ? '+' : ''}$${profit.toFixed(2)}\n⏳ Cooldown de 2h activo.`));
         } catch (e) { logger.error(`Erro venda stop-loss ${symbol}`, { message: e.message }); }
         pos.inPosition = false; pos.entryPrice = null; pos.quantity = null;
-        pos.lastStopLoss = Date.now();
+        pos.highestPrice = null; pos.lastStopLoss = Date.now();
         await persistPositions();
         continue;
       }
 
+      // Take-Profit fixo (backup)
       if (currentPrice >= pos.takeProfit) {
         try {
           await placeOrder(symbol, 'SELL', pos.quantity);
@@ -362,11 +399,12 @@ async function runCycle() {
           await telegram.sendMessage(telegram.formatAlert(`🎯 Take-Profit atingido em ${symbol}!\nResultado: +$${profit.toFixed(2)}`));
         } catch (e) { logger.error(`Erro venda take-profit ${symbol}`, { message: e.message }); }
         pos.inPosition = false; pos.entryPrice = null; pos.quantity = null;
-        pos.lastStopLoss = null;
+        pos.highestPrice = null; pos.lastStopLoss = null;
         await persistPositions();
         continue;
       }
 
+      // Venda antecipada por sinal
       if (data.signal === 'SELL' && sentiment.signal === 'SELL' && news.signal === 'NEGATIVE') {
         try {
           await placeOrder(symbol, 'SELL', pos.quantity);
@@ -376,11 +414,12 @@ async function runCycle() {
           await telegram.sendMessage(telegram.formatAlert(`⚠️ Venda antecipada em ${symbol}\nResultado: ${profit >= 0 ? '+' : ''}$${profit.toFixed(2)}`));
         } catch (e) { logger.error(`Erro venda signal ${symbol}`, { message: e.message }); }
         pos.inPosition = false; pos.entryPrice = null; pos.quantity = null;
-        pos.lastStopLoss = Date.now();
+        pos.highestPrice = null; pos.lastStopLoss = Date.now();
         await persistPositions();
       }
     }
 
+    // Novas compras
     const openCount = PAIRS.filter(p => positions[p].inPosition).length;
     const maxCapital = parseFloat(process.env.MAX_CAPITAL) || balance;
     const capitalPerPair = maxCapital / PAIRS.length;
@@ -449,6 +488,7 @@ async function runCycle() {
             pos.takeProfit = takeProfit;
             pos.quantity = qty;
             pos.lastStopLoss = null;
+            pos.highestPrice = alloc.currentPrice;
             await persistPositions();
 
             recordBuy(alloc.symbol, alloc.currentPrice, qty, pos.stopLoss, pos.takeProfit);
@@ -553,6 +593,7 @@ Cooldown após SL: 2 horas
 Indicadores: RSI + SMA + MACD + BB + ATR
 Confirmação: Tendência 4h + Padrões de velas
 Stop-Loss: Adaptativo (2x ATR)
+Trailing Take-Profit: activo após +3%
 Position Sizing: Dinâmico por volatilidade
 Alerta semestral: 50% lucros activo
 Posições em memória: ${PAIRS.filter(p => positions[p].inPosition).join(', ') || 'nenhuma'}`);

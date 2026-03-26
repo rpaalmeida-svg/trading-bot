@@ -1,10 +1,10 @@
 {
   "BTCUSDT": {
     "inPosition": true,
-    "entryPrice": 69958.23,
-    "stopLoss": 69278.54024,
-    "takeProfit": 73456.1415,
-    "quantity": 0.00452
+    "entryPrice": 69248.73,
+    "stopLoss": 68536.75972,
+    "takeProfit": 72711.16649999999,
+    "quantity": 0.00434
   },
   "ETHUSDT": {
     "inPosition": true,
