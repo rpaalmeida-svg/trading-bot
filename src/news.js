@@ -1,22 +1,19 @@
 const axios = require('axios');
 const logger = require('./logger');
 
-// Cache para não sobrecarregar APIs gratuitas
 let macroCache = null;
 let macroCacheTime = 0;
-const CACHE_TTL = 15 * 60 * 1000; // 15 minutos
+const CACHE_TTL = 15 * 60 * 1000;
 
 async function getMacroData() {
   try {
-    // Global crypto market data — CoinGecko gratuito
     const globalRes = await axios.get('https://api.coingecko.com/api/v3/global');
     const global = globalRes.data?.data || {};
-
-    const btcDominance = global.market_cap_percentage?.btc || 0;
-    const totalMarketCapChange = global.market_cap_change_percentage_24h_usd || 0;
-    const totalVolume = global.total_volume?.usd || 0;
-
-    return { btcDominance, totalMarketCapChange, totalVolume };
+    return {
+      btcDominance: global.market_cap_percentage?.btc || 0,
+      totalMarketCapChange: global.market_cap_change_percentage_24h_usd || 0,
+      totalVolume: global.total_volume?.usd || 0
+    };
   } catch (err) {
     logger.error('Erro macro global', { message: err.message });
     return { btcDominance: 50, totalMarketCapChange: 0, totalVolume: 0 };
@@ -25,16 +22,10 @@ async function getMacroData() {
 
 async function getEtfFlows() {
   try {
-    // SoSoValue — ETF flows gratuito
-    const res = await axios.get('https://sosovalue.com/api/etf/btc-us-total', {
-      timeout: 5000
-    });
+    const res = await axios.get('https://sosovalue.com/api/etf/btc-us-total', { timeout: 5000 });
     const data = res.data;
     if (data && data.netInflow !== undefined) {
-      return {
-        netInflow: parseFloat(data.netInflow) || 0,
-        available: true
-      };
+      return { netInflow: parseFloat(data.netInflow) || 0, available: true };
     }
     return { netInflow: 0, available: false };
   } catch (err) {
@@ -44,43 +35,112 @@ async function getEtfFlows() {
 
 async function getBtcOnChain() {
   try {
-    // CoinGecko — métricas BTC
     const res = await axios.get('https://api.coingecko.com/api/v3/coins/bitcoin', {
-      params: {
-        localization: false,
-        tickers: false,
-        community_data: false,
-        developer_data: false,
-        sparkline: false
-      },
+      params: { localization: false, tickers: false, community_data: false, developer_data: false, sparkline: false },
       timeout: 5000
     });
-
     const data = res.data;
     const priceChange7d = data?.market_data?.price_change_percentage_7d || 0;
     const priceChange30d = data?.market_data?.price_change_percentage_30d || 0;
-    const volumeChange = data?.market_data?.total_volume?.usd || 0;
     const ath = data?.market_data?.ath?.usd || 0;
     const currentPrice = data?.market_data?.current_price?.usd || 0;
     const distanceFromAth = ath > 0 ? ((currentPrice - ath) / ath) * 100 : 0;
-
-    return { priceChange7d, priceChange30d, volumeChange, distanceFromAth };
+    return { priceChange7d, priceChange30d, distanceFromAth };
   } catch (err) {
     logger.error('Erro on-chain BTC', { message: err.message });
-    return { priceChange7d: 0, priceChange30d: 0, volumeChange: 0, distanceFromAth: 0 };
+    return { priceChange7d: 0, priceChange30d: 0, distanceFromAth: 0 };
+  }
+}
+
+// CryptoCompare — notícias reais em tempo real
+async function getCryptoCompareNews() {
+  try {
+    const apiKey = process.env.CRYPTOCOMPARE_KEY;
+    if (!apiKey) return { score: 0, titles: [], available: false };
+
+    const res = await axios.get('https://min-api.cryptocompare.com/data/v2/news/', {
+      params: {
+        lang: 'EN',
+        categories: 'BTC,ETH,BNB,Trading,Market',
+        sortOrder: 'latest',
+        extraParams: 'TradingBot'
+      },
+      headers: { 'authorization': `Apikey ${apiKey}` },
+      timeout: 8000
+    });
+
+    const articles = res.data?.Data || [];
+    const recent = articles.slice(0, 15); // últimas 15 notícias
+
+    // Palavras que indicam sentimento negativo
+    const negativeKeywords = [
+      'crash', 'ban', 'hack', 'scam', 'fraud', 'collapse', 'bankrupt',
+      'lawsuit', 'regulation', 'crackdown', 'fear', 'panic', 'dump',
+      'plunge', 'tumble', 'slump', 'bearish', 'warning', 'risk', 'loss',
+      'sec', 'investigation', 'shutdown', 'sanctions', 'terror', 'war'
+    ];
+
+    // Palavras que indicam sentimento positivo
+    const positiveKeywords = [
+      'bull', 'rally', 'surge', 'gain', 'adoption', 'etf', 'approval',
+      'record', 'high', 'partnership', 'launch', 'growth', 'invest',
+      'institutional', 'upgrade', 'milestone', 'breakthrough', 'accumulate',
+      'breakout', 'recovery', 'rebound', 'positive', 'optimistic'
+    ];
+
+    let newsScore = 0;
+    let negativeCount = 0;
+    let positiveCount = 0;
+    const impactTitles = [];
+
+    for (const article of recent) {
+      const text = (article.title + ' ' + (article.body || '')).toLowerCase();
+      const title = article.title;
+
+      let articleNeg = 0;
+      let articlePos = 0;
+
+      negativeKeywords.forEach(kw => { if (text.includes(kw)) articleNeg++; });
+      positiveKeywords.forEach(kw => { if (text.includes(kw)) articlePos++; });
+
+      if (articleNeg > articlePos && articleNeg >= 2) {
+        negativeCount++;
+        newsScore -= articleNeg * 3;
+        if (impactTitles.length < 3) impactTitles.push(`⚠️ ${title}`);
+      } else if (articlePos > articleNeg && articlePos >= 2) {
+        positiveCount++;
+        newsScore += articlePos * 2;
+        if (impactTitles.length < 3) impactTitles.push(`✅ ${title}`);
+      }
+    }
+
+    // Normalizar score entre -50 e +50
+    newsScore = Math.max(-50, Math.min(50, newsScore));
+
+    logger.info('CryptoCompare News', {
+      articles: recent.length,
+      positiveCount,
+      negativeCount,
+      newsScore
+    });
+
+    return { score: newsScore, titles: impactTitles, available: true, negativeCount, positiveCount };
+
+  } catch (err) {
+    logger.error('Erro CryptoCompare news', { message: err.message });
+    return { score: 0, titles: [], available: false };
   }
 }
 
 async function getNewsSentiment() {
   const now = Date.now();
 
-  // Usar cache se recente
   if (macroCache && (now - macroCacheTime) < CACHE_TTL) {
     return macroCache;
   }
 
   try {
-    // 1. Fear & Greed 7 dias
+    // 1. Fear & Greed 14 dias
     const fgRes = await axios.get('https://api.alternative.me/fng/?limit=14');
     const fgData = fgRes.data?.data || [];
     const fgValues = fgData.map(d => parseInt(d.value));
@@ -110,107 +170,68 @@ async function getNewsSentiment() {
     // 5. ETF Flows
     const etfFlows = await getEtfFlows();
 
-    // ─── CÁLCULO DO SCORE MACRO ───────────────────────────────
+    // 6. CryptoCompare — notícias reais
+    const cryptoNews = await getCryptoCompareNews();
+
+    // ─── CÁLCULO DO SCORE MACRO ────────────────────────────────
 
     let macroScore = 0;
     const signals = [];
 
     // Fear & Greed actual
-    if (currentFG <= 20) {
-      macroScore += 25;
-      signals.push(`Medo extremo (${currentFG}) → zona de compra histórica`);
-    } else if (currentFG <= 35) {
-      macroScore += 15;
-      signals.push(`Medo (${currentFG}) → favorável`);
-    } else if (currentFG >= 80) {
-      macroScore -= 25;
-      signals.push(`Ganância extrema (${currentFG}) → cuidado`);
-    } else if (currentFG >= 65) {
-      macroScore -= 15;
-      signals.push(`Ganância (${currentFG}) → precaução`);
-    }
+    if (currentFG <= 20) { macroScore += 25; signals.push(`Medo extremo (${currentFG}) → zona de compra histórica`); }
+    else if (currentFG <= 35) { macroScore += 15; signals.push(`Medo (${currentFG}) → favorável`); }
+    else if (currentFG >= 80) { macroScore -= 25; signals.push(`Ganância extrema (${currentFG}) → cuidado`); }
+    else if (currentFG >= 65) { macroScore -= 15; signals.push(`Ganância (${currentFG}) → precaução`); }
 
-    // Tendência Fear & Greed (está a melhorar ou piorar?)
-    if (fgTrend > 8) {
-      macroScore += 15;
-      signals.push(`Sentimento a melhorar +${fgTrend.toFixed(0)}pts/3dias`);
-    } else if (fgTrend < -8) {
-      macroScore -= 15;
-      signals.push(`Sentimento a deteriorar ${fgTrend.toFixed(0)}pts/3dias`);
-    }
+    // Tendência Fear & Greed
+    if (fgTrend > 8) { macroScore += 15; signals.push(`Sentimento a melhorar +${fgTrend.toFixed(0)}pts/3dias`); }
+    else if (fgTrend < -8) { macroScore -= 15; signals.push(`Sentimento a deteriorar ${fgTrend.toFixed(0)}pts/3dias`); }
 
-    // Momentum de 2 semanas
-    if (fgMomentum > 5) {
-      macroScore += 10;
-      signals.push(`Momentum 2 semanas positivo`);
-    } else if (fgMomentum < -5) {
-      macroScore -= 10;
-      signals.push(`Momentum 2 semanas negativo`);
-    }
+    // Momentum 2 semanas
+    if (fgMomentum > 5) { macroScore += 10; signals.push(`Momentum 2 semanas positivo`); }
+    else if (fgMomentum < -5) { macroScore -= 10; signals.push(`Momentum 2 semanas negativo`); }
 
-    // BTC dominance — sobe = altcoins fracas, desce = altcoins fortes
-    if (macro.btcDominance > 60) {
-      macroScore -= 10;
-      signals.push(`BTC dominance alta (${macro.btcDominance.toFixed(1)}%) → ETH/BNB fraco`);
-    } else if (macro.btcDominance < 45) {
-      macroScore += 10;
-      signals.push(`BTC dominance baixa (${macro.btcDominance.toFixed(1)}%) → altcoins fortes`);
-    }
+    // BTC dominance
+    if (macro.btcDominance > 60) { macroScore -= 10; signals.push(`BTC dominance alta (${macro.btcDominance.toFixed(1)}%)`); }
+    else if (macro.btcDominance < 45) { macroScore += 10; signals.push(`BTC dominance baixa (${macro.btcDominance.toFixed(1)}%)`); }
 
     // Market cap change 24h
-    if (macro.totalMarketCapChange > 3) {
-      macroScore += 15;
-      signals.push(`Mercado total +${macro.totalMarketCapChange.toFixed(1)}% 24h`);
-    } else if (macro.totalMarketCapChange < -3) {
-      macroScore -= 20;
-      signals.push(`Mercado total ${macro.totalMarketCapChange.toFixed(1)}% 24h → queda`);
-    } else if (macro.totalMarketCapChange < -1) {
-      macroScore -= 10;
-      signals.push(`Mercado ligeiramente negativo ${macro.totalMarketCapChange.toFixed(1)}%`);
-    }
+    if (macro.totalMarketCapChange > 3) { macroScore += 15; signals.push(`Mercado total +${macro.totalMarketCapChange.toFixed(1)}% 24h`); }
+    else if (macro.totalMarketCapChange < -5) { macroScore -= 25; signals.push(`Mercado em queda ${macro.totalMarketCapChange.toFixed(1)}% 24h`); }
+    else if (macro.totalMarketCapChange < -3) { macroScore -= 20; signals.push(`Mercado total ${macro.totalMarketCapChange.toFixed(1)}% 24h`); }
+    else if (macro.totalMarketCapChange < -1) { macroScore -= 10; }
 
     // BTC performance 7 dias
-    if (onChain.priceChange7d > 5) {
-      macroScore += 10;
-      signals.push(`BTC +${onChain.priceChange7d.toFixed(1)}% semana`);
-    } else if (onChain.priceChange7d < -10) {
-      macroScore -= 20;
-      signals.push(`BTC ${onChain.priceChange7d.toFixed(1)}% semana → tendência baixista`);
-    } else if (onChain.priceChange7d < -5) {
-      macroScore -= 10;
-      signals.push(`BTC ${onChain.priceChange7d.toFixed(1)}% semana → fraco`);
-    }
+    if (onChain.priceChange7d > 5) { macroScore += 10; signals.push(`BTC +${onChain.priceChange7d.toFixed(1)}% semana`); }
+    else if (onChain.priceChange7d < -10) { macroScore -= 20; signals.push(`BTC ${onChain.priceChange7d.toFixed(1)}% semana → tendência baixista`); }
+    else if (onChain.priceChange7d < -5) { macroScore -= 10; signals.push(`BTC ${onChain.priceChange7d.toFixed(1)}% semana → fraco`); }
 
-    // Distância do ATH — quão longe estamos dos máximos
-    if (onChain.distanceFromAth < -50) {
-      macroScore += 20;
-      signals.push(`BTC ${onChain.distanceFromAth.toFixed(0)}% do ATH → zona de valor`);
-    } else if (onChain.distanceFromAth < -30) {
-      macroScore += 10;
-      signals.push(`BTC ${onChain.distanceFromAth.toFixed(0)}% do ATH → desconto`);
-    } else if (onChain.distanceFromAth > -5) {
-      macroScore -= 10;
-      signals.push(`BTC perto do ATH → sobrecomprado macro`);
-    }
+    // Distância do ATH
+    if (onChain.distanceFromAth < -50) { macroScore += 20; signals.push(`BTC ${onChain.distanceFromAth.toFixed(0)}% do ATH → zona de valor`); }
+    else if (onChain.distanceFromAth < -30) { macroScore += 10; signals.push(`BTC ${onChain.distanceFromAth.toFixed(0)}% do ATH → desconto`); }
+    else if (onChain.distanceFromAth > -5) { macroScore -= 10; signals.push(`BTC perto do ATH → sobrecomprado macro`); }
 
-    // Trending — os nossos pares em destaque
-    if (trending.length >= 2) {
-      macroScore += 15;
-      signals.push(`Em trending: ${trending.join(', ')}`);
-    } else if (trending.length === 1) {
-      macroScore += 8;
-      signals.push(`Em trending: ${trending.join(', ')}`);
-    }
+    // Trending
+    if (trending.length >= 2) { macroScore += 15; signals.push(`Em trending: ${trending.join(', ')}`); }
+    else if (trending.length === 1) { macroScore += 8; signals.push(`Em trending: ${trending.join(', ')}`); }
 
-    // ETF Flows — quando disponível
+    // ETF Flows
     if (etfFlows.available) {
-      if (etfFlows.netInflow > 200000000) {
-        macroScore += 20;
-        signals.push(`ETF inflows +$${(etfFlows.netInflow / 1e6).toFixed(0)}M → institucional a comprar`);
-      } else if (etfFlows.netInflow < -200000000) {
-        macroScore -= 25;
-        signals.push(`ETF outflows -$${Math.abs(etfFlows.netInflow / 1e6).toFixed(0)}M → institucional a vender`);
+      if (etfFlows.netInflow > 200000000) { macroScore += 20; signals.push(`ETF inflows +$${(etfFlows.netInflow / 1e6).toFixed(0)}M`); }
+      else if (etfFlows.netInflow < -200000000) { macroScore -= 25; signals.push(`ETF outflows -$${Math.abs(etfFlows.netInflow / 1e6).toFixed(0)}M`); }
+    }
+
+    // CryptoCompare notícias reais — peso adicional
+    if (cryptoNews.available) {
+      macroScore += cryptoNews.score;
+      if (cryptoNews.negativeCount >= 4) {
+        signals.push(`📰 ${cryptoNews.negativeCount} notícias negativas detectadas`);
+      } else if (cryptoNews.positiveCount >= 4) {
+        signals.push(`📰 ${cryptoNews.positiveCount} notícias positivas detectadas`);
       }
+      // Adicionar títulos de impacto
+      cryptoNews.titles.forEach(t => signals.push(t));
     }
 
     // ─── SINAL FINAL ────────────────────────────────────────────
@@ -219,13 +240,14 @@ async function getNewsSentiment() {
                  : macroScore <= -25 ? 'NEGATIVE'
                  : 'NEUTRAL';
 
-    // Bloquear compras em colapso de mercado extremo
+    // Bloquear compras em colapso extremo
     const blockBuying = macro.totalMarketCapChange < -5 ||
-                        (onChain.priceChange7d < -15 && currentFG < 20 && fgTrend < -10);
+                        (onChain.priceChange7d < -15 && currentFG < 20 && fgTrend < -10) ||
+                        (cryptoNews.available && cryptoNews.negativeCount >= 6);
 
-    const recentTitles = signals.slice(0, 5);
+    const recentTitles = signals.slice(0, 6);
 
-    logger.info('Macro Sentiment', {
+    logger.info('Macro Sentiment Final', {
       macroScore,
       signal,
       currentFG,
@@ -234,7 +256,8 @@ async function getNewsSentiment() {
       marketCapChange: macro.totalMarketCapChange.toFixed(1),
       btc7d: onChain.priceChange7d.toFixed(1),
       distanceATH: onChain.distanceFromAth.toFixed(1),
-      trending,
+      newsScore: cryptoNews.score,
+      newsAvailable: cryptoNews.available,
       blockBuying
     });
 
@@ -252,7 +275,9 @@ async function getNewsSentiment() {
         btc30d: onChain.priceChange30d,
         distanceFromAth: onChain.distanceFromAth,
         trending,
-        etfInflow: etfFlows.netInflow
+        etfInflow: etfFlows.netInflow,
+        newsScore: cryptoNews.score,
+        newsArticles: cryptoNews.positiveCount + cryptoNews.negativeCount
       }
     };
 
