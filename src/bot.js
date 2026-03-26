@@ -12,6 +12,7 @@ const { PAIRS, PAIR_CONFIG, calcScore, allocateCapital, getReason } = require('.
 const { recordBuy, recordSell, getStats } = require('./history');
 const { getNewsSentiment } = require('./news');
 const { initDB, saveState, loadState } = require('./database');
+const { checkAndRunScan } = require('./scanner');
 
 const BASE_URL = 'https://testnet.binance.vision/api';
 const API_KEY = process.env.BINANCE_API_KEY;
@@ -309,6 +310,7 @@ async function runCycle() {
     logger.info(`Ciclo iniciado`, { balance: balance.toFixed(2), fearGreed: sentiment.value, newsSignal: news.signal });
 
     await checkSemestralWithdrawal(balance);
+    await checkAndRunScan();
 
     const shouldStop = risk.checkDailyLoss(balance);
     if (shouldStop) {
