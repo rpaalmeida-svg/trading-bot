@@ -487,3 +487,126 @@
 {"timestamp":"2026-03-26T12:31:28.281Z","type":"INFO","message":"Análise BNBUSDT","data":{"interval":"1h","price":629.61,"rsi":"6.04","signal":"WAIT","score":100}}
 {"timestamp":"2026-03-26T12:31:28.288Z","type":"INFO","message":"Análise ETHUSDT","data":{"interval":"30m","price":2071.01,"rsi":"20.57","signal":"WAIT","score":100}}
 {"timestamp":"2026-03-26T12:31:28.289Z","type":"INFO","message":"Trailing Stop-Loss actualizado","data":{"oldStop":"67517.51","newStop":"68536.76","currentPrice":"69369.19"}}
+{"timestamp":"2026-03-26T13:01:27.382Z","type":"INFO","message":"Fear & Greed Index","data":{"value":10,"classification":"Extreme Fear"}}
+{"timestamp":"2026-03-26T13:01:27.493Z","type":"INFO","message":"Sem notícias disponíveis","data":null}
+{"timestamp":"2026-03-26T13:01:27.494Z","type":"INFO","message":"Ciclo iniciado","data":{"balance":"3281.82","fearGreed":10,"newsSignal":"NEUTRAL"}}
+{"timestamp":"2026-03-26T13:01:28.230Z","type":"INFO","message":"Análise BTCUSDT","data":{"interval":"1h","price":69470.81,"rsi":"11.32","signal":"WAIT","score":100}}
+{"timestamp":"2026-03-26T13:01:28.263Z","type":"INFO","message":"Análise ETHUSDT","data":{"interval":"30m","price":2075.08,"rsi":"20.81","signal":"WAIT","score":100}}
+{"timestamp":"2026-03-26T13:01:28.277Z","type":"INFO","message":"Análise BNBUSDT","data":{"interval":"1h","price":629.72,"rsi":"6.98","signal":"WAIT","score":100}}
+{"timestamp":"2026-03-26T13:01:28.279Z","type":"INFO","message":"Trailing Stop-Loss actualizado","data":{"oldStop":"68536.76","newStop":"68637.16","currentPrice":"69470.81"}}
+{"timestamp":"2026-03-26T13:31:27.377Z","type":"INFO","message":"Fear & Greed Index","data":{"value":10,"classification":"Extreme Fear"}}
+{"timestamp":"2026-03-26T13:31:27.504Z","type":"INFO","message":"Sem notícias disponíveis","data":null}
+{"timestamp":"2026-03-26T13:31:27.505Z","type":"INFO","message":"Ciclo iniciado","data":{"balance":"3281.82","fearGreed":10,"newsSignal":"NEUTRAL"}}
+{"timestamp":"2026-03-26T13:31:28.239Z","type":"INFO","message":"Análise BTCUSDT","data":{"interval":"1h","price":69415.81,"rsi":"9.95","signal":"WAIT","score":100}}
+{"timestamp":"2026-03-26T13:31:28.276Z","type":"INFO","message":"Análise ETHUSDT","data":{"interval":"30m","price":2077.73,"rsi":"23.63","signal":"WAIT","score":100}}
+{"timestamp":"2026-03-26T13:31:28.278Z","type":"INFO","message":"Análise BNBUSDT","data":{"interval":"1h","price":630.22,"rsi":"9.06","signal":"WAIT","score":100}}
+{"timestamp":"2026-03-26T14:01:27.450Z","type":"INFO","message":"Fear & Greed Index","data":{"value":10,"classification":"Extreme Fear"}}
+{"timestamp":"2026-03-26T14:01:27.587Z","type":"INFO","message":"Sem notícias disponíveis","data":null}
+{"timestamp":"2026-03-26T14:01:27.588Z","type":"INFO","message":"Ciclo iniciado","data":{"balance":"3281.82","fearGreed":10,"newsSignal":"NEUTRAL"}}
+{"timestamp":"2026-03-26T14:01:28.327Z","type":"INFO","message":"Análise BTCUSDT","data":{"interval":"1h","price":69661.08,"rsi":"18.07","signal":"WAIT","score":100}}
+{"timestamp":"2026-03-26T14:01:28.368Z","type":"INFO","message":"Análise ETHUSDT","data":{"interval":"30m","price":2079.97,"rsi":"27.50","signal":"WAIT","score":100}}
+{"timestamp":"2026-03-26T14:01:28.368Z","type":"INFO","message":"Análise BNBUSDT","data":{"interval":"1h","price":631.68,"rsi":"15.34","signal":"WAIT","score":100}}
+{"timestamp":"2026-03-26T14:01:28.370Z","type":"INFO","message":"Trailing Stop-Loss actualizado","data":{"oldStop":"68637.16","newStop":"68825.15","currentPrice":"69661.08"}}
+{"timestamp":"2026-03-26T14:31:27.397Z","type":"INFO","message":"Fear & Greed Index","data":{"value":10,"classification":"Extreme Fear"}}
+{"timestamp":"2026-03-26T14:31:27.557Z","type":"INFO","message":"Sem notícias disponíveis","data":null}
+{"timestamp":"2026-03-26T14:31:27.558Z","type":"INFO","message":"Ciclo iniciado","data":{"balance":"3281.82","fearGreed":10,"newsSignal":"NEUTRAL"}}
+{"timestamp":"2026-03-26T14:31:28.288Z","type":"INFO","message":"Análise BTCUSDT","data":{"interval":"1h","price":69712.82,"rsi":"19.69","signal":"WAIT","score":100}}
+{"timestamp":"2026-03-26T14:31:28.337Z","type":"INFO","message":"Análise BNBUSDT","data":{"interval":"1h","price":630.58,"rsi":"13.40","signal":"WAIT","score":100}}
+{"timestamp":"2026-03-26T14:31:28.339Z","type":"INFO","message":"Análise ETHUSDT","data":{"interval":"30m","price":2079.58,"rsi":"24.07","signal":"WAIT","score":100}}
+{"timestamp":"2026-03-26T14:31:28.340Z","type":"INFO","message":"Trailing Stop-Loss actualizado","data":{"oldStop":"68825.15","newStop":"68876.27","currentPrice":"69712.82"}}
+{"timestamp":"2026-03-26T15:01:27.368Z","type":"INFO","message":"Fear & Greed Index","data":{"value":10,"classification":"Extreme Fear"}}
+{"timestamp":"2026-03-26T15:01:27.492Z","type":"INFO","message":"Sem notícias disponíveis","data":null}
+{"timestamp":"2026-03-26T15:01:27.493Z","type":"INFO","message":"Ciclo iniciado","data":{"balance":"3281.82","fearGreed":10,"newsSignal":"NEUTRAL"}}
+{"timestamp":"2026-03-26T15:01:28.233Z","type":"INFO","message":"Análise BTCUSDT","data":{"interval":"1h","price":69422.1,"rsi":"16.11","signal":"WAIT","score":100}}
+{"timestamp":"2026-03-26T15:01:28.262Z","type":"INFO","message":"Análise ETHUSDT","data":{"interval":"30m","price":2073.97,"rsi":"22.48","signal":"WAIT","score":100}}
+{"timestamp":"2026-03-26T15:01:28.271Z","type":"INFO","message":"Análise BNBUSDT","data":{"interval":"1h","price":629.43,"rsi":"12.95","signal":"WAIT","score":100}}
+{"timestamp":"2026-03-26T15:31:27.426Z","type":"INFO","message":"Fear & Greed Index","data":{"value":10,"classification":"Extreme Fear"}}
+{"timestamp":"2026-03-26T15:31:27.556Z","type":"INFO","message":"Sem notícias disponíveis","data":null}
+{"timestamp":"2026-03-26T15:31:27.557Z","type":"INFO","message":"Ciclo iniciado","data":{"balance":"3361.89","fearGreed":10,"newsSignal":"NEUTRAL"}}
+{"timestamp":"2026-03-26T15:31:28.300Z","type":"INFO","message":"Análise BTCUSDT","data":{"interval":"1h","price":69032.82,"rsi":"14.07","signal":"WAIT","score":100}}
+{"timestamp":"2026-03-26T15:31:28.336Z","type":"INFO","message":"Análise ETHUSDT","data":{"interval":"30m","price":2065.22,"rsi":"16.14","signal":"WAIT","score":100}}
+{"timestamp":"2026-03-26T15:31:28.779Z","type":"INFO","message":"Análise BNBUSDT","data":{"interval":"1h","price":627.88,"rsi":"12.14","signal":"WAIT","score":100}}
+{"timestamp":"2026-03-26T16:01:27.363Z","type":"INFO","message":"Fear & Greed Index","data":{"value":10,"classification":"Extreme Fear"}}
+{"timestamp":"2026-03-26T16:01:27.505Z","type":"INFO","message":"Sem notícias disponíveis","data":null}
+{"timestamp":"2026-03-26T16:01:27.505Z","type":"INFO","message":"Ciclo iniciado","data":{"balance":"3441.56","fearGreed":10,"newsSignal":"NEUTRAL"}}
+{"timestamp":"2026-03-26T16:01:28.248Z","type":"INFO","message":"Análise BTCUSDT","data":{"interval":"1h","price":69035.12,"rsi":"16.01","signal":"WAIT","score":100}}
+{"timestamp":"2026-03-26T16:01:28.260Z","type":"INFO","message":"Análise BNBUSDT","data":{"interval":"1h","price":626.69,"rsi":"13.21","signal":"WAIT","score":100}}
+{"timestamp":"2026-03-26T16:01:28.263Z","type":"INFO","message":"Análise ETHUSDT","data":{"interval":"30m","price":2069.06,"rsi":"21.65","signal":"WAIT","score":100}}
+{"timestamp":"2026-03-26T16:01:28.507Z","type":"TRADE","message":"Ordem executada: SELL BNBUSDT","data":{"symbol":"BNBUSDT","quantity":0.474,"orderId":7407540}}
+{"timestamp":"2026-03-26T16:01:29.036Z","type":"TRADE","message":"Ordem executada: BUY BNBUSDT","data":{"symbol":"BNBUSDT","quantity":0.48,"orderId":7407541}}
+{"timestamp":"2026-03-26T16:31:27.406Z","type":"INFO","message":"Fear & Greed Index","data":{"value":10,"classification":"Extreme Fear"}}
+{"timestamp":"2026-03-26T16:31:27.509Z","type":"INFO","message":"Sem notícias disponíveis","data":null}
+{"timestamp":"2026-03-26T16:31:27.509Z","type":"INFO","message":"Ciclo iniciado","data":{"balance":"3437.80","fearGreed":10,"newsSignal":"NEUTRAL"}}
+{"timestamp":"2026-03-26T16:31:28.246Z","type":"INFO","message":"Análise BTCUSDT","data":{"interval":"1h","price":68914.01,"rsi":"15.34","signal":"WAIT","score":100}}
+{"timestamp":"2026-03-26T16:31:28.265Z","type":"INFO","message":"Análise BNBUSDT","data":{"interval":"1h","price":626.35,"rsi":"13.02","signal":"WAIT","score":100}}
+{"timestamp":"2026-03-26T16:31:28.729Z","type":"INFO","message":"Análise ETHUSDT","data":{"interval":"30m","price":2065.43,"rsi":"33.68","signal":"WAIT","score":100}}
+{"timestamp":"2026-03-26T16:31:28.732Z","type":"INFO","message":"Trailing Stop-Loss actualizado","data":{"oldStop":"611.02","newStop":"618.83","currentPrice":"626.35"}}
+{"timestamp":"2026-03-26T17:01:27.429Z","type":"INFO","message":"Fear & Greed Index","data":{"value":10,"classification":"Extreme Fear"}}
+{"timestamp":"2026-03-26T17:01:27.539Z","type":"INFO","message":"Sem notícias disponíveis","data":null}
+{"timestamp":"2026-03-26T17:01:27.539Z","type":"INFO","message":"Ciclo iniciado","data":{"balance":"3437.80","fearGreed":10,"newsSignal":"NEUTRAL"}}
+{"timestamp":"2026-03-26T17:01:28.294Z","type":"INFO","message":"Análise ETHUSDT","data":{"interval":"30m","price":2063.28,"rsi":"33.60","signal":"WAIT","score":100}}
+{"timestamp":"2026-03-26T17:01:28.297Z","type":"INFO","message":"Análise BNBUSDT","data":{"interval":"1h","price":627.34,"rsi":"15.76","signal":"WAIT","score":100}}
+{"timestamp":"2026-03-26T17:01:28.711Z","type":"INFO","message":"Análise BTCUSDT","data":{"interval":"1h","price":68975.24,"rsi":"16.71","signal":"WAIT","score":100}}
+{"timestamp":"2026-03-26T17:01:28.715Z","type":"INFO","message":"Trailing Stop-Loss actualizado","data":{"oldStop":"618.83","newStop":"619.81","currentPrice":"627.34"}}
+{"timestamp":"2026-03-26T17:31:27.454Z","type":"INFO","message":"Fear & Greed Index","data":{"value":10,"classification":"Extreme Fear"}}
+{"timestamp":"2026-03-26T17:31:27.559Z","type":"INFO","message":"Sem notícias disponíveis","data":null}
+{"timestamp":"2026-03-26T17:31:27.559Z","type":"INFO","message":"Ciclo iniciado","data":{"balance":"3437.80","fearGreed":10,"newsSignal":"NEUTRAL"}}
+{"timestamp":"2026-03-26T17:31:28.289Z","type":"INFO","message":"Análise BTCUSDT","data":{"interval":"1h","price":69111.6,"rsi":"20.48","signal":"WAIT","score":100}}
+{"timestamp":"2026-03-26T17:31:28.309Z","type":"INFO","message":"Análise BNBUSDT","data":{"interval":"1h","price":628.57,"rsi":"20.07","signal":"WAIT","score":100}}
+{"timestamp":"2026-03-26T17:31:28.310Z","type":"INFO","message":"Análise ETHUSDT","data":{"interval":"30m","price":2068.5,"rsi":"41.80","signal":"WAIT","score":88}}
+{"timestamp":"2026-03-26T17:31:28.313Z","type":"INFO","message":"Trailing Stop-Loss actualizado","data":{"oldStop":"619.81","newStop":"621.03","currentPrice":"628.57"}}
+{"timestamp":"2026-03-26T18:01:27.419Z","type":"INFO","message":"Fear & Greed Index","data":{"value":10,"classification":"Extreme Fear"}}
+{"timestamp":"2026-03-26T18:01:27.604Z","type":"INFO","message":"Sem notícias disponíveis","data":null}
+{"timestamp":"2026-03-26T18:01:27.604Z","type":"INFO","message":"Ciclo iniciado","data":{"balance":"2987.10","fearGreed":10,"newsSignal":"NEUTRAL"}}
+{"timestamp":"2026-03-26T18:01:28.340Z","type":"INFO","message":"Análise BTCUSDT","data":{"interval":"1h","price":68582.86,"rsi":"15.97","signal":"WAIT","score":100}}
+{"timestamp":"2026-03-26T18:01:28.361Z","type":"INFO","message":"Análise BNBUSDT","data":{"interval":"1h","price":626.13,"rsi":"16.80","signal":"WAIT","score":100}}
+{"timestamp":"2026-03-26T18:01:28.362Z","type":"INFO","message":"Análise ETHUSDT","data":{"interval":"30m","price":2054.5,"rsi":"40.83","signal":"WAIT","score":88}}
+{"timestamp":"2026-03-26T18:01:28.607Z","type":"TRADE","message":"Ordem executada: SELL BTCUSDT","data":{"symbol":"BTCUSDT","quantity":0.00434,"orderId":23966160}}
+{"timestamp":"2026-03-26T18:01:29.139Z","type":"TRADE","message":"Ordem executada: SELL ETHUSDT","data":{"symbol":"ETHUSDT","quantity":0.1446,"orderId":14138389}}
+{"timestamp":"2026-03-26T18:01:30.020Z","type":"TRADE","message":"Ordem executada: BUY BTCUSDT","data":{"symbol":"BTCUSDT","quantity":0.00461,"orderId":23966166}}
+{"timestamp":"2026-03-26T18:01:30.432Z","type":"TRADE","message":"Ordem executada: BUY ETHUSDT","data":{"symbol":"ETHUSDT","quantity":0.137,"orderId":14138393}}
+{"timestamp":"2026-03-26T18:31:27.415Z","type":"INFO","message":"Fear & Greed Index","data":{"value":10,"classification":"Extreme Fear"}}
+{"timestamp":"2026-03-26T18:31:27.532Z","type":"INFO","message":"Sem notícias disponíveis","data":null}
+{"timestamp":"2026-03-26T18:31:27.532Z","type":"INFO","message":"Ciclo iniciado","data":{"balance":"3063.58","fearGreed":10,"newsSignal":"NEUTRAL"}}
+{"timestamp":"2026-03-26T18:31:28.275Z","type":"INFO","message":"Análise BTCUSDT","data":{"interval":"1h","price":68261.1,"rsi":"13.00","signal":"WAIT","score":100}}
+{"timestamp":"2026-03-26T18:31:28.277Z","type":"INFO","message":"Análise ETHUSDT","data":{"interval":"30m","price":2040.84,"rsi":"33.35","signal":"WAIT","score":100}}
+{"timestamp":"2026-03-26T18:31:28.280Z","type":"INFO","message":"Análise BNBUSDT","data":{"interval":"1h","price":623.43,"rsi":"12.78","signal":"WAIT","score":100}}
+{"timestamp":"2026-03-26T18:31:28.284Z","type":"INFO","message":"Trailing Stop-Loss actualizado","data":{"oldStop":"66868.29","newStop":"67441.97","currentPrice":"68261.10"}}
+{"timestamp":"2026-03-26T18:31:28.286Z","type":"INFO","message":"Trailing Stop-Loss actualizado","data":{"oldStop":"2003.14","newStop":"2016.35","currentPrice":"2040.84"}}
+{"timestamp":"2026-03-26T19:01:27.440Z","type":"INFO","message":"Fear & Greed Index","data":{"value":10,"classification":"Extreme Fear"}}
+{"timestamp":"2026-03-26T19:01:27.538Z","type":"INFO","message":"Sem notícias disponíveis","data":null}
+{"timestamp":"2026-03-26T19:01:27.538Z","type":"INFO","message":"Ciclo iniciado","data":{"balance":"3063.58","fearGreed":10,"newsSignal":"NEUTRAL"}}
+{"timestamp":"2026-03-26T19:01:28.281Z","type":"INFO","message":"Análise BTCUSDT","data":{"interval":"1h","price":68475.5,"rsi":"18.25","signal":"WAIT","score":100}}
+{"timestamp":"2026-03-26T19:01:28.288Z","type":"INFO","message":"Análise ETHUSDT","data":{"interval":"30m","price":2046.43,"rsi":"35.30","signal":"WAIT","score":88}}
+{"timestamp":"2026-03-26T19:01:28.290Z","type":"INFO","message":"Análise BNBUSDT","data":{"interval":"1h","price":625.6,"rsi":"21.47","signal":"WAIT","score":100}}
+{"timestamp":"2026-03-26T19:01:28.292Z","type":"INFO","message":"Trailing Stop-Loss actualizado","data":{"oldStop":"67441.97","newStop":"67653.79","currentPrice":"68475.50"}}
+{"timestamp":"2026-03-26T19:01:28.293Z","type":"INFO","message":"Trailing Stop-Loss actualizado","data":{"oldStop":"2016.35","newStop":"2021.87","currentPrice":"2046.43"}}
+{"timestamp":"2026-03-26T19:31:27.406Z","type":"INFO","message":"Fear & Greed Index","data":{"value":10,"classification":"Extreme Fear"}}
+{"timestamp":"2026-03-26T19:31:27.508Z","type":"INFO","message":"Sem notícias disponíveis","data":null}
+{"timestamp":"2026-03-26T19:31:27.509Z","type":"INFO","message":"Ciclo iniciado","data":{"balance":"3063.58","fearGreed":10,"newsSignal":"NEUTRAL"}}
+{"timestamp":"2026-03-26T19:31:28.229Z","type":"INFO","message":"Análise BTCUSDT","data":{"interval":"1h","price":68401.99,"rsi":"17.72","signal":"WAIT","score":100}}
+{"timestamp":"2026-03-26T19:31:28.710Z","type":"INFO","message":"Análise BNBUSDT","data":{"interval":"1h","price":625.39,"rsi":"21.20","signal":"WAIT","score":100}}
+{"timestamp":"2026-03-26T19:31:28.712Z","type":"INFO","message":"Análise ETHUSDT","data":{"interval":"30m","price":2041.65,"rsi":"31.90","signal":"WAIT","score":100}}
+{"timestamp":"2026-03-26T20:01:27.430Z","type":"INFO","message":"Fear & Greed Index","data":{"value":10,"classification":"Extreme Fear"}}
+{"timestamp":"2026-03-26T20:01:27.524Z","type":"INFO","message":"Sem notícias disponíveis","data":null}
+{"timestamp":"2026-03-26T20:01:27.524Z","type":"INFO","message":"Ciclo iniciado","data":{"balance":"3063.58","fearGreed":10,"newsSignal":"NEUTRAL"}}
+{"timestamp":"2026-03-26T20:01:28.259Z","type":"INFO","message":"Análise BTCUSDT","data":{"interval":"1h","price":68563.86,"rsi":"18.79","signal":"WAIT","score":100}}
+{"timestamp":"2026-03-26T20:01:28.280Z","type":"INFO","message":"Análise BNBUSDT","data":{"interval":"1h","price":625.65,"rsi":"21.21","signal":"WAIT","score":100}}
+{"timestamp":"2026-03-26T20:01:28.281Z","type":"INFO","message":"Análise ETHUSDT","data":{"interval":"30m","price":2049.32,"rsi":"34.88","signal":"WAIT","score":100}}
+{"timestamp":"2026-03-26T20:01:28.281Z","type":"INFO","message":"Trailing Stop-Loss actualizado","data":{"oldStop":"67653.79","newStop":"67741.09","currentPrice":"68563.86"}}
+{"timestamp":"2026-03-26T20:01:28.283Z","type":"INFO","message":"Trailing Stop-Loss actualizado","data":{"oldStop":"2021.87","newStop":"2024.73","currentPrice":"2049.32"}}
+{"timestamp":"2026-03-26T20:31:27.407Z","type":"INFO","message":"Fear & Greed Index","data":{"value":10,"classification":"Extreme Fear"}}
+{"timestamp":"2026-03-26T20:31:27.603Z","type":"INFO","message":"Sem notícias disponíveis","data":null}
+{"timestamp":"2026-03-26T20:31:27.604Z","type":"INFO","message":"Ciclo iniciado","data":{"balance":"3063.58","fearGreed":10,"newsSignal":"NEUTRAL"}}
+{"timestamp":"2026-03-26T20:31:28.341Z","type":"INFO","message":"Análise BTCUSDT","data":{"interval":"1h","price":69266.39,"rsi":"36.96","signal":"WAIT","score":88}}
+{"timestamp":"2026-03-26T20:31:28.357Z","type":"INFO","message":"Análise BNBUSDT","data":{"interval":"1h","price":631.26,"rsi":"41.01","signal":"WAIT","score":88}}
+{"timestamp":"2026-03-26T20:31:28.828Z","type":"INFO","message":"Análise ETHUSDT","data":{"interval":"30m","price":2071.35,"rsi":"45.17","signal":"WAIT","score":76}}
+{"timestamp":"2026-03-26T20:31:28.830Z","type":"INFO","message":"Trailing Stop-Loss actualizado","data":{"oldStop":"67741.09","newStop":"68435.19","currentPrice":"69266.39"}}
+{"timestamp":"2026-03-26T20:31:28.832Z","type":"INFO","message":"Trailing Stop-Loss actualizado","data":{"oldStop":"2024.73","newStop":"2046.49","currentPrice":"2071.35"}}
+{"timestamp":"2026-03-26T20:31:28.833Z","type":"INFO","message":"Trailing Stop-Loss actualizado","data":{"oldStop":"621.03","newStop":"623.68","currentPrice":"631.26"}}
+{"timestamp":"2026-03-26T21:01:27.404Z","type":"INFO","message":"Fear & Greed Index","data":{"value":10,"classification":"Extreme Fear"}}
+{"timestamp":"2026-03-26T21:01:27.535Z","type":"INFO","message":"Sem notícias disponíveis","data":null}
+{"timestamp":"2026-03-26T21:01:27.536Z","type":"INFO","message":"Ciclo iniciado","data":{"balance":"3063.58","fearGreed":10,"newsSignal":"NEUTRAL"}}
+{"timestamp":"2026-03-26T21:01:28.268Z","type":"INFO","message":"Análise BTCUSDT","data":{"interval":"1h","price":68942.69,"rsi":"30.43","signal":"WAIT","score":100}}
+{"timestamp":"2026-03-26T21:01:28.295Z","type":"INFO","message":"Análise ETHUSDT","data":{"interval":"30m","price":2060.85,"rsi":"43.11","signal":"WAIT","score":88}}
+{"timestamp":"2026-03-26T21:01:28.296Z","type":"INFO","message":"Análise BNBUSDT","data":{"interval":"1h","price":629.57,"rsi":"36.10","signal":"WAIT","score":100}}

@@ -8,7 +8,7 @@ const strategy = require('./strategy');
 const risk = require('./risk');
 const telegram = require('./telegram');
 const { getFearGreedIndex, getEmoji } = require('./sentiment');
-const { PAIRS, PAIR_CONFIG, calcScore, allocateCapital, getReason } = require('./portfolio');
+const { PAIRS, PAIR_CONFIG, calcScore, calcMacroScore, calcCompositeScore, allocateCapital, getReason } = require('./portfolio');
 const { recordBuy, recordSell, getStats } = require('./history');
 const { getNewsSentiment } = require('./news');
 const { initDB, saveState, loadState } = require('./database');
@@ -123,7 +123,7 @@ async function placeOrder(symbol, side, quantity) {
   }
 }
 
-async function analyzePair(symbol, sentiment) {
+async function analyzePair(symbol, sentiment, macroData) {
   try {
     const pairConfig = PAIR_CONFIG[symbol];
     const candles = await getCandles(symbol, pairConfig.interval, 100);
@@ -165,7 +165,15 @@ async function analyzePair(symbol, sentiment) {
 
     const avgVolume = volume / 24;
     const volumeRatio = avgVolume > 0 ? volume / avgVolume : 1;
-    const score = rsi ? calcScore(rsi, sentiment.value, volumeRatio, pairConfig.rsiBuy) : 0;
+
+    // Score técnico
+    const technicalScore = rsi ? calcScore(rsi, sentiment.value, volumeRatio, pairConfig.rsiBuy) : 0;
+
+    // Score macro
+    const macroScore = calcMacroScore(macroData);
+
+    // Score composto — decisão final
+    const score = calcCompositeScore(technicalScore, macroScore);
 
     logger.info(`Análise ${symbol}`, {
       interval: pairConfig.interval,
@@ -177,12 +185,15 @@ async function analyzePair(symbol, sentiment) {
       trend4h,
       candlePattern,
       signal,
-      score
+      technicalScore,
+      macroScore,
+      compositeScore: score
     });
 
     return {
-      symbol, currentPrice, score, signal, rsi, smaFast, smaSlow,
-      macd, bb, atrData, trend4h, candlePattern, volume, candles,
+      symbol, currentPrice, score, technicalScore, macroScore, signal,
+      rsi, smaFast, smaSlow, macd, bb, atrData, trend4h, candlePattern,
+      volume, candles,
       analysis: { rsi, smaFast, smaSlow, signal }
     };
   } catch (err) {
@@ -221,6 +232,8 @@ function sendDashboardUpdate(balance, validAnalyses, sentiment, news, stats) {
         stopLoss: positions[p].stopLoss,
         takeProfit: positions[p].takeProfit,
         score: validAnalyses.find(a => a.symbol === p)?.score || 0,
+        technicalScore: validAnalyses.find(a => a.symbol === p)?.technicalScore || 0,
+        macroScore: validAnalyses.find(a => a.symbol === p)?.macroScore || 0,
         rsi: validAnalyses.find(a => a.symbol === p)?.rsi?.toFixed(2) || 'N/A',
         signal: validAnalyses.find(a => a.symbol === p)?.signal || 'WAIT',
         currentPrice: validAnalyses.find(a => a.symbol === p)?.currentPrice || 0,
@@ -301,7 +314,7 @@ async function checkSemestralWithdrawal(balance) {
 async function runCycle() {
   let balance = 0;
   let sentiment = { value: 50, classification: 'Neutral', signal: 'NEUTRAL' };
-  let news = { signal: 'NEUTRAL', sentimentScore: 0, recentTitles: [] };
+  let news = { signal: 'NEUTRAL', sentimentScore: 0, recentTitles: [], blockBuying: false, raw: {} };
   let validAnalyses = [];
 
   try {
@@ -309,7 +322,13 @@ async function runCycle() {
     sentiment = await getFearGreedIndex();
     news = await getNewsSentiment();
 
-    logger.info(`Ciclo iniciado`, { balance: balance.toFixed(2), fearGreed: sentiment.value, newsSignal: news.signal });
+    logger.info(`Ciclo iniciado`, {
+      balance: balance.toFixed(2),
+      fearGreed: sentiment.value,
+      newsSignal: news.signal,
+      macroScore: news.sentimentScore,
+      blockBuying: news.blockBuying
+    });
 
     await checkSemestralWithdrawal(balance);
     await checkAndRunScan();
@@ -321,7 +340,18 @@ async function runCycle() {
       return;
     }
 
-    const analyses = await Promise.all(PAIRS.map(symbol => analyzePair(symbol, sentiment)));
+    // Bloquear compras se macro extremamente negativo
+    if (news.blockBuying) {
+      logger.warn('Macro bloqueou todas as compras', { score: news.sentimentScore });
+      await telegram.sendMessage(telegram.formatAlert(
+        `🌍 Macro Overlay activado — compras bloqueadas!\n` +
+        `Score macro: ${news.sentimentScore}\n` +
+        `Razão: ${news.recentTitles[0] || 'Mercado em colapso'}\n` +
+        `Bot a aguardar estabilização.`
+      ));
+    }
+
+    const analyses = await Promise.all(PAIRS.map(symbol => analyzePair(symbol, sentiment, news)));
     validAnalyses = analyses.filter(a => a !== null);
 
     sendDashboardUpdate(balance, validAnalyses, sentiment, news, getStats());
@@ -333,7 +363,7 @@ async function runCycle() {
 
       const { currentPrice, symbol, atrData } = data;
 
-      // Actualizar preço máximo desde a entrada
+      // Actualizar preço máximo
       if (!pos.highestPrice || currentPrice > pos.highestPrice) {
         pos.highestPrice = currentPrice;
         await persistPositions();
@@ -349,7 +379,7 @@ async function runCycle() {
         await persistPositions();
       }
 
-      // Trailing Take-Profit — activa após +3% de ganho, vende se recuar 4% do máximo
+      // Trailing Take-Profit — activa após +3%, vende se recua 4% do máximo
       const gainFromEntry = pos.entryPrice ? (pos.highestPrice - pos.entryPrice) / pos.entryPrice : 0;
       const trailingTPActive = gainFromEntry >= 0.03;
       const trailingTPStop = pos.highestPrice * 0.96;
@@ -374,7 +404,7 @@ async function runCycle() {
         continue;
       }
 
-      // Stop-Loss fixo
+      // Stop-Loss
       if (currentPrice <= pos.stopLoss) {
         try {
           await placeOrder(symbol, 'SELL', pos.quantity);
@@ -404,14 +434,14 @@ async function runCycle() {
         continue;
       }
 
-      // Venda antecipada por sinal
-      if (data.signal === 'SELL' && sentiment.signal === 'SELL' && news.signal === 'NEGATIVE') {
+      // Venda por sinal técnico + macro negativo
+      if (data.signal === 'SELL' && news.signal === 'NEGATIVE') {
         try {
           await placeOrder(symbol, 'SELL', pos.quantity);
           const trade = recordSell(symbol, currentPrice, 'SIGNAL');
           const profit = trade ? trade.profit : 0;
           await telegram.sendMessage(telegram.formatTrade('SELL', { symbol, price: currentPrice.toFixed(2), quantity: pos.quantity, profit: profit.toFixed(2) }));
-          await telegram.sendMessage(telegram.formatAlert(`⚠️ Venda antecipada em ${symbol}\nResultado: ${profit >= 0 ? '+' : ''}$${profit.toFixed(2)}`));
+          await telegram.sendMessage(telegram.formatAlert(`⚠️ Venda antecipada em ${symbol}\nSinal técnico + macro negativo\nResultado: ${profit >= 0 ? '+' : ''}$${profit.toFixed(2)}`));
         } catch (e) { logger.error(`Erro venda signal ${symbol}`, { message: e.message }); }
         pos.inPosition = false; pos.entryPrice = null; pos.quantity = null;
         pos.highestPrice = null; pos.lastStopLoss = Date.now();
@@ -427,10 +457,12 @@ async function runCycle() {
 
     if (capitalPerPair < 10) {
       logger.warn('Capital insuficiente por par', { capitalPerPair });
-    } else if (openCount < PAIRS.length && balance > 10) {
+    } else if (openCount < PAIRS.length && balance > 10 && !news.blockBuying) {
       if (news.signal === 'NEGATIVE') {
-        logger.warn('Notícias negativas — compras pausadas');
-        await telegram.sendMessage(telegram.formatAlert(`📰 Notícias negativas — compras pausadas.`));
+        logger.warn('Macro negativo — compras pausadas', { score: news.sentimentScore });
+        await telegram.sendMessage(telegram.formatAlert(
+          `🌍 Macro negativo — compras pausadas\nScore: ${news.sentimentScore}\n${news.recentTitles[0] || ''}`
+        ));
       } else {
         const pairsWithoutPosition = validAnalyses.filter(a => {
           if (positions[a.symbol].inPosition) return false;
@@ -445,7 +477,12 @@ async function runCycle() {
           }
 
           if (a.score < MIN_SCORE_TO_BUY) {
-            logger.info(`Score insuficiente para ${a.symbol}`, { score: a.score, minimo: MIN_SCORE_TO_BUY });
+            logger.info(`Score insuficiente para ${a.symbol}`, {
+              compositeScore: a.score,
+              technicalScore: a.technicalScore,
+              macroScore: a.macroScore,
+              minimo: MIN_SCORE_TO_BUY
+            });
             return false;
           }
 
@@ -493,7 +530,7 @@ async function runCycle() {
 
             recordBuy(alloc.symbol, alloc.currentPrice, qty, pos.stopLoss, pos.takeProfit);
 
-            const reason = getReason(alloc.score, alloc.rsi, sentiment.value);
+            const reason = getReason(alloc.score, alloc.rsi, sentiment.value, news);
             const atrPctStr = alloc.atrData ? alloc.atrData.atrPct.toFixed(2) + '%' : 'N/A';
             const allocPct = alloc.atrData ? Math.round(strategy.getDynamicAllocation(100, alloc.atrData.atrPct)) + '%' : '100%';
 
@@ -505,7 +542,16 @@ async function runCycle() {
               takeProfit: pos.takeProfit.toFixed(2)
             }));
             await telegram.sendMessage(telegram.formatAlert(
-              `🟢 Compra ${alloc.symbol}\nScore: ${alloc.score}/100\nTendência 4h: ${alloc.trend4h}\nMACD: ${alloc.macd ? (alloc.macd.histogram > 0 ? '📈 Positivo' : '📉 Negativo') : 'N/A'}\nBB %B: ${alloc.bb ? alloc.bb.percentB.toFixed(3) : 'N/A'}\nATR: ${atrPctStr} (alocação: ${allocPct})\nPadrão: ${alloc.candlePattern}\nRSI Buy: ${pairConfig.rsiBuy}\nRazão: ${reason}\nCapital: $${dynamicAllocation.toFixed(2)}`
+              `🟢 Compra ${alloc.symbol}\n` +
+              `Score: ${alloc.score}/100 (T:${alloc.technicalScore} M:${alloc.macroScore})\n` +
+              `Tendência 4h: ${alloc.trend4h}\n` +
+              `MACD: ${alloc.macd ? (alloc.macd.histogram > 0 ? '📈 Positivo' : '📉 Negativo') : 'N/A'}\n` +
+              `BB %B: ${alloc.bb ? alloc.bb.percentB.toFixed(3) : 'N/A'}\n` +
+              `ATR: ${atrPctStr} (alocação: ${allocPct})\n` +
+              `Padrão: ${alloc.candlePattern}\n` +
+              `Macro: ${news.signal} (${news.sentimentScore})\n` +
+              `Razão: ${reason}\n` +
+              `Capital: $${dynamicAllocation.toFixed(2)}`
             ));
           } catch (e) {
             logger.error(`Erro ao comprar ${alloc.symbol}`, { message: e.message });
@@ -595,6 +641,7 @@ Confirmação: Tendência 4h + Padrões de velas
 Stop-Loss: Adaptativo (2x ATR)
 Trailing Take-Profit: activo após +3%
 Position Sizing: Dinâmico por volatilidade
+Macro Overlay: Fear&Greed + Market Cap + BTC7d + ATH + ETF Flows
 Alerta semestral: 50% lucros activo
 Posições em memória: ${PAIRS.filter(p => positions[p].inPosition).join(', ') || 'nenhuma'}`);
 
