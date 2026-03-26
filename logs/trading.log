@@ -460,3 +460,9 @@
 {"timestamp":"2026-03-26T10:31:28.044Z","type":"INFO","message":"Trailing Stop-Loss actualizado","data":{"oldStop":"2027.88","newStop":"2057.37","currentPrice":"2082.36"}}
 {"timestamp":"2026-03-26T10:42:06.397Z","type":"INFO","message":"Bot multi-par arrancado","data":{"pairs":["BTCUSDT","ETHUSDT","BNBUSDT"]}}
 {"timestamp":"2026-03-26T10:51:05.250Z","type":"INFO","message":"Bot multi-par arrancado","data":{"pairs":["BTCUSDT","ETHUSDT","BNBUSDT"]}}
+{"timestamp":"2026-03-26T11:01:26.354Z","type":"INFO","message":"Fear & Greed Index","data":{"value":10,"classification":"Extreme Fear"}}
+{"timestamp":"2026-03-26T11:01:26.462Z","type":"INFO","message":"Sem notícias disponíveis","data":null}
+{"timestamp":"2026-03-26T11:01:26.462Z","type":"INFO","message":"Ciclo iniciado","data":{"balance":"3350.56","fearGreed":10,"newsSignal":"NEUTRAL"}}
+{"timestamp":"2026-03-26T11:01:27.207Z","type":"INFO","message":"Análise BTCUSDT","data":{"interval":"1h","price":69538.35,"rsi":"18.38","signal":"WAIT","score":100}}
+{"timestamp":"2026-03-26T11:01:27.221Z","type":"INFO","message":"Análise ETHUSDT","data":{"interval":"30m","price":2078.58,"rsi":"13.31","signal":"WAIT","score":100}}
+{"timestamp":"2026-03-26T11:01:27.688Z","type":"INFO","message":"Análise BNBUSDT","data":{"interval":"1h","price":630.25,"rsi":"10.67","signal":"WAIT","score":100}}

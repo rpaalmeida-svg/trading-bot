@@ -18,6 +18,7 @@ const API_KEY = process.env.BINANCE_API_KEY;
 const SECRET_KEY = process.env.BINANCE_SECRET_KEY;
 const COOLDOWN_MS = 2 * 60 * 60 * 1000;
 const MIN_SCORE_TO_BUY = 75;
+const SEMESTRE_MS = 6 * 30 * 24 * 60 * 60 * 1000;
 
 let initialBalance = null;
 
@@ -71,7 +72,6 @@ async function getPrice(symbol) {
   return parseFloat(res.data.price);
 }
 
-// Busca candles completos com high, low, close para ATR e padrões de velas
 async function getCandles(symbol, interval, limit = 100) {
   const res = await axios.get(`${BASE_URL}/v3/klines`, {
     params: { symbol, interval, limit }
@@ -139,7 +139,6 @@ async function analyzePair(symbol, sentiment) {
     const trend4h = strategy.getTrend4h(candles4h);
     const candlePattern = strategy.detectCandlePattern(candles);
 
-    // Condições de compra
     const macdConfirma = macd ? macd.histogram > 0 || macd.macdLine > macd.signalLine : true;
     const bbConfirma = bb ? bb.percentB < 0.2 : true;
     const patternConfirma = ['HAMMER', 'BULLISH_ENGULFING'].includes(candlePattern) || candlePattern === 'NONE';
@@ -236,6 +235,66 @@ function sendDashboardUpdate(balance, validAnalyses, sentiment, news, stats) {
   }
 }
 
+async function checkSemestralWithdrawal(balance) {
+  try {
+    const lastWithdrawal = await loadState('lastWithdrawal');
+    const semestralCapital = await loadState('semestralCapital');
+    const now = Date.now();
+
+    if (!lastWithdrawal || !semestralCapital) {
+      await saveState('lastWithdrawal', now);
+      await saveState('semestralCapital', balance);
+      logger.info('Referência semestral iniciada', { balance });
+      return;
+    }
+
+    const elapsed = now - lastWithdrawal;
+    if (elapsed < SEMESTRE_MS) {
+      const diasRestantes = Math.round((SEMESTRE_MS - elapsed) / (24 * 60 * 60 * 1000));
+      logger.info('Próximo levantamento semestral', { diasRestantes });
+      return;
+    }
+
+    const lucroTotal = balance - semestralCapital;
+
+    if (lucroTotal <= 0) {
+      await telegram.sendMessage(telegram.formatAlert(
+        `📊 Revisão Semestral\n\nSaldo actual: $${balance.toFixed(2)}\nSaldo há 6 meses: $${semestralCapital.toFixed(2)}\n\nResultado: $${lucroTotal.toFixed(2)}\n\nSemestre negativo — não levantar. A reiniciar contagem.`
+      ));
+    } else {
+      const aLevantar = lucroTotal * 0.50;
+      const aFicar = lucroTotal * 0.50;
+      const irs28 = aLevantar * 0.28;
+      const liquido = aLevantar - irs28;
+
+      await telegram.sendMessage(telegram.formatAlert(
+        `🎯 <b>Alerta de Levantamento Semestral!</b>\n\n` +
+        `💰 Saldo actual: $${balance.toFixed(2)}\n` +
+        `📅 Saldo há 6 meses: $${semestralCapital.toFixed(2)}\n` +
+        `📈 Lucro total: +$${lucroTotal.toFixed(2)}\n\n` +
+        `━━━━━━━━━━━━━━━━━━\n` +
+        `🏦 <b>A levantar (50%):</b> $${aLevantar.toFixed(2)}\n` +
+        `🏦 IRS estimado (28%): -$${irs28.toFixed(2)}\n` +
+        `✅ <b>Líquido para conta:</b> $${liquido.toFixed(2)}\n\n` +
+        `♻️ Fica a compor (50%): $${aFicar.toFixed(2)}\n` +
+        `━━━━━━━━━━━━━━━━━━\n\n` +
+        `📱 Como levantar:\n` +
+        `1. Abre a app Binance\n` +
+        `2. Converte USDT → EUR\n` +
+        `3. Levanta para o teu IBAN\n\n` +
+        `⏰ Próxima revisão: daqui a 6 meses`
+      ));
+    }
+
+    await saveState('lastWithdrawal', now);
+    await saveState('semestralCapital', balance);
+    logger.info('Referência semestral actualizada', { balance });
+
+  } catch (err) {
+    logger.error('Erro no check semestral', { message: err.message });
+  }
+}
+
 async function runCycle() {
   let balance = 0;
   let sentiment = { value: 50, classification: 'Neutral', signal: 'NEUTRAL' };
@@ -249,6 +308,8 @@ async function runCycle() {
 
     logger.info(`Ciclo iniciado`, { balance: balance.toFixed(2), fearGreed: sentiment.value, newsSignal: news.signal });
 
+    await checkSemestralWithdrawal(balance);
+
     const shouldStop = risk.checkDailyLoss(balance);
     if (shouldStop) {
       await telegram.sendMessage(telegram.formatAlert('🛑 Limite de perda diária atingido — bot pausado!'));
@@ -261,14 +322,12 @@ async function runCycle() {
 
     sendDashboardUpdate(balance, validAnalyses, sentiment, news, getStats());
 
-    // Gerir posições abertas
     for (const data of validAnalyses) {
       const pos = positions[data.symbol];
       if (!pos.inPosition) continue;
 
       const { currentPrice, symbol, atrData } = data;
 
-      // Trailing stop adaptativo baseado em ATR
       const trailingPct = atrData && atrData.atrPct > 0
         ? Math.min(Math.max(atrData.atrPct * 1.5, 1.5), 4.0) / 100
         : 0.025;
@@ -320,7 +379,6 @@ async function runCycle() {
       }
     }
 
-    // Novas compras
     const openCount = PAIRS.filter(p => positions[p].inPosition).length;
     const maxCapital = parseFloat(process.env.MAX_CAPITAL) || balance;
     const capitalPerPair = maxCapital / PAIRS.length;
@@ -370,25 +428,15 @@ async function runCycle() {
           if (pos.inPosition) continue;
 
           const pairConfig = PAIR_CONFIG[alloc.symbol];
-
-          // Position sizing dinâmico baseado em ATR
           const baseAllocation = Math.min(alloc.allocation, capitalPerPair);
           const dynamicAllocation = strategy.getDynamicAllocation(baseAllocation, alloc.atrData?.atrPct);
 
-          if (dynamicAllocation < 10) {
-            logger.warn(`Capital dinâmico insuficiente para ${alloc.symbol}`, { dynamicAllocation });
-            continue;
-          }
+          if (dynamicAllocation < 10) continue;
 
           const qty = risk.calculatePositionSize(dynamicAllocation, alloc.currentPrice, alloc.symbol);
           if (qty <= 0) continue;
 
-          // Stop-loss adaptativo baseado em ATR
-          const adaptiveStop = strategy.getAdaptiveStopLoss(
-            alloc.currentPrice,
-            alloc.atrData?.atr,
-            2.0
-          );
+          const adaptiveStop = strategy.getAdaptiveStopLoss(alloc.currentPrice, alloc.atrData?.atr, 2.0);
           const takeProfit = alloc.currentPrice * (1 + pairConfig.takeProfit);
 
           try {
@@ -504,6 +552,7 @@ Indicadores: RSI + SMA + MACD + BB + ATR
 Confirmação: Tendência 4h + Padrões de velas
 Stop-Loss: Adaptativo (2x ATR)
 Position Sizing: Dinâmico por volatilidade
+Alerta semestral: 50% lucros activo
 Posições em memória: ${PAIRS.filter(p => positions[p].inPosition).join(', ') || 'nenhuma'}`);
 
   runCycle();
