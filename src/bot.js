@@ -71,15 +71,20 @@ async function getPrice(symbol) {
   return parseFloat(res.data.price);
 }
 
-async function getPriceHistory(symbol) {
-  const config = PAIR_CONFIG[symbol];
+// Busca candles completos com high, low, close para ATR e padrões de velas
+async function getCandles(symbol, interval, limit = 100) {
   const res = await axios.get(`${BASE_URL}/v3/klines`, {
-    params: { symbol, interval: config.interval, limit: 100 }
+    params: { symbol, interval, limit }
   });
-  return res.data.map(k => parseFloat(k[4]));
+  return res.data.map(k => ({
+    open: parseFloat(k[1]),
+    high: parseFloat(k[2]),
+    low: parseFloat(k[3]),
+    close: parseFloat(k[4]),
+    volume: parseFloat(k[5])
+  }));
 }
 
-// Buscar dados de 4h para confirmação de tendência
 async function getPriceHistory4h(symbol) {
   try {
     const res = await axios.get(`${BASE_URL}/v3/klines`, {
@@ -118,24 +123,39 @@ async function placeOrder(symbol, side, quantity) {
 
 async function analyzePair(symbol, sentiment) {
   try {
-    const prices = await getPriceHistory(symbol);
-    const prices4h = await getPriceHistory4h(symbol);
-    const currentPrice = await getPrice(symbol);
-    const volume = await getVolume(symbol);
     const pairConfig = PAIR_CONFIG[symbol];
+    const candles = await getCandles(symbol, pairConfig.interval, 100);
+    const candles4h = await getPriceHistory4h(symbol);
+    const prices = candles.map(c => c.close);
+    const currentPrice = candles[candles.length - 1].close;
+    const volume = await getVolume(symbol);
 
     const rsi = strategy.calculateRSI(prices, 14);
     const smaFast = strategy.calculateSMA(prices, 9);
     const smaSlow = strategy.calculateSMA(prices, 21);
     const macd = strategy.calculateMACD(prices);
-    const trend4h = strategy.getTrend4h(prices4h);
+    const bb = strategy.calculateBollingerBands(prices, 20, 2);
+    const atrData = strategy.calculateATR(candles, 14);
+    const trend4h = strategy.getTrend4h(candles4h);
+    const candlePattern = strategy.detectCandlePattern(candles);
 
-    // Sinal baseado em RSI + SMA + MACD + tendência 4h
-    let signal = 'WAIT';
+    // Condições de compra
     const macdConfirma = macd ? macd.histogram > 0 || macd.macdLine > macd.signalLine : true;
+    const bbConfirma = bb ? bb.percentB < 0.2 : true;
+    const patternConfirma = ['HAMMER', 'BULLISH_ENGULFING'].includes(candlePattern) || candlePattern === 'NONE';
+    const volatilityOk = atrData ? atrData.atrPct < 4.0 : true;
 
+    let signal = 'WAIT';
     if (rsi && smaFast && smaSlow) {
-      if (rsi < pairConfig.rsiBuy && smaFast > smaSlow && macdConfirma && trend4h !== 'BEARISH') {
+      if (
+        rsi < pairConfig.rsiBuy &&
+        smaFast > smaSlow &&
+        macdConfirma &&
+        bbConfirma &&
+        patternConfirma &&
+        volatilityOk &&
+        trend4h !== 'BEARISH'
+      ) {
         signal = 'BUY';
       } else if (rsi > pairConfig.rsiSell && smaFast < smaSlow) {
         signal = 'SELL';
@@ -151,14 +171,17 @@ async function analyzePair(symbol, sentiment) {
       price: currentPrice,
       rsi: rsi ? rsi.toFixed(2) : 'N/A',
       macdHistogram: macd ? macd.histogram.toFixed(4) : 'N/A',
+      bbPercentB: bb ? bb.percentB.toFixed(3) : 'N/A',
+      atrPct: atrData ? atrData.atrPct.toFixed(2) + '%' : 'N/A',
       trend4h,
+      candlePattern,
       signal,
       score
     });
 
     return {
       symbol, currentPrice, score, signal, rsi, smaFast, smaSlow,
-      macd, trend4h, volume,
+      macd, bb, atrData, trend4h, candlePattern, volume, candles,
       analysis: { rsi, smaFast, smaSlow, signal }
     };
   } catch (err) {
@@ -202,6 +225,9 @@ function sendDashboardUpdate(balance, validAnalyses, sentiment, news, stats) {
         currentPrice: validAnalyses.find(a => a.symbol === p)?.currentPrice || 0,
         interval: PAIR_CONFIG[p].interval,
         trend4h: validAnalyses.find(a => a.symbol === p)?.trend4h || 'N/A',
+        atrPct: validAnalyses.find(a => a.symbol === p)?.atrData?.atrPct?.toFixed(2) || 'N/A',
+        bbPercentB: validAnalyses.find(a => a.symbol === p)?.bb?.percentB?.toFixed(3) || 'N/A',
+        candlePattern: validAnalyses.find(a => a.symbol === p)?.candlePattern || 'NONE',
         cooldownRestante: positions[p].lastStopLoss ? Math.max(0, Math.round((COOLDOWN_MS - (Date.now() - positions[p].lastStopLoss)) / 60000)) : 0
       }))
     });
@@ -240,10 +266,17 @@ async function runCycle() {
       const pos = positions[data.symbol];
       if (!pos.inPosition) continue;
 
-      const { currentPrice, symbol } = data;
+      const { currentPrice, symbol, atrData } = data;
 
-      pos.stopLoss = risk.updateTrailingStop(currentPrice, pos.stopLoss);
-      await persistPositions();
+      // Trailing stop adaptativo baseado em ATR
+      const trailingPct = atrData && atrData.atrPct > 0
+        ? Math.min(Math.max(atrData.atrPct * 1.5, 1.5), 4.0) / 100
+        : 0.025;
+      const newStop = currentPrice * (1 - trailingPct);
+      if (newStop > pos.stopLoss) {
+        pos.stopLoss = newStop;
+        await persistPositions();
+      }
 
       if (currentPrice <= pos.stopLoss) {
         try {
@@ -297,13 +330,12 @@ async function runCycle() {
       logger.warn('Capital insuficiente por par', { capitalPerPair });
     } else if (openCount < PAIRS.length && balance > 10) {
       if (news.signal === 'NEGATIVE') {
-        logger.warn('Notícias negativas — compras pausadas', { score: news.sentimentScore });
+        logger.warn('Notícias negativas — compras pausadas');
         await telegram.sendMessage(telegram.formatAlert(`📰 Notícias negativas — compras pausadas.`));
       } else {
         const pairsWithoutPosition = validAnalyses.filter(a => {
           if (positions[a.symbol].inPosition) return false;
 
-          // Cooldown após stop-loss
           if (positions[a.symbol].lastStopLoss) {
             const elapsed = now - positions[a.symbol].lastStopLoss;
             if (elapsed < COOLDOWN_MS) {
@@ -313,15 +345,18 @@ async function runCycle() {
             }
           }
 
-          // Score mínimo
           if (a.score < MIN_SCORE_TO_BUY) {
             logger.info(`Score insuficiente para ${a.symbol}`, { score: a.score, minimo: MIN_SCORE_TO_BUY });
             return false;
           }
 
-          // Tendência 4h — bloquear se BEARISH
           if (a.trend4h === 'BEARISH') {
-            logger.info(`Tendência 4h BEARISH — compra bloqueada para ${a.symbol}`);
+            logger.info(`Tendência 4h BEARISH — bloqueado para ${a.symbol}`);
+            return false;
+          }
+
+          if (a.atrData && a.atrData.atrPct > 4.0) {
+            logger.info(`Volatilidade extrema — bloqueado para ${a.symbol}`, { atrPct: a.atrData.atrPct.toFixed(2) });
             return false;
           }
 
@@ -335,18 +370,33 @@ async function runCycle() {
           if (pos.inPosition) continue;
 
           const pairConfig = PAIR_CONFIG[alloc.symbol];
-          const safeAllocation = Math.min(alloc.allocation, capitalPerPair);
-          if (safeAllocation < 10) continue;
 
-          const qty = risk.calculatePositionSize(safeAllocation, alloc.currentPrice, alloc.symbol);
+          // Position sizing dinâmico baseado em ATR
+          const baseAllocation = Math.min(alloc.allocation, capitalPerPair);
+          const dynamicAllocation = strategy.getDynamicAllocation(baseAllocation, alloc.atrData?.atrPct);
+
+          if (dynamicAllocation < 10) {
+            logger.warn(`Capital dinâmico insuficiente para ${alloc.symbol}`, { dynamicAllocation });
+            continue;
+          }
+
+          const qty = risk.calculatePositionSize(dynamicAllocation, alloc.currentPrice, alloc.symbol);
           if (qty <= 0) continue;
+
+          // Stop-loss adaptativo baseado em ATR
+          const adaptiveStop = strategy.getAdaptiveStopLoss(
+            alloc.currentPrice,
+            alloc.atrData?.atr,
+            2.0
+          );
+          const takeProfit = alloc.currentPrice * (1 + pairConfig.takeProfit);
 
           try {
             await placeOrder(alloc.symbol, 'BUY', qty);
             pos.inPosition = true;
             pos.entryPrice = alloc.currentPrice;
-            pos.stopLoss = alloc.currentPrice * (1 - pairConfig.stopLoss);
-            pos.takeProfit = alloc.currentPrice * (1 + pairConfig.takeProfit);
+            pos.stopLoss = adaptiveStop;
+            pos.takeProfit = takeProfit;
             pos.quantity = qty;
             pos.lastStopLoss = null;
             await persistPositions();
@@ -354,6 +404,9 @@ async function runCycle() {
             recordBuy(alloc.symbol, alloc.currentPrice, qty, pos.stopLoss, pos.takeProfit);
 
             const reason = getReason(alloc.score, alloc.rsi, sentiment.value);
+            const atrPctStr = alloc.atrData ? alloc.atrData.atrPct.toFixed(2) + '%' : 'N/A';
+            const allocPct = alloc.atrData ? Math.round(strategy.getDynamicAllocation(100, alloc.atrData.atrPct)) + '%' : '100%';
+
             await telegram.sendMessage(telegram.formatTrade('BUY', {
               symbol: alloc.symbol,
               price: alloc.currentPrice.toFixed(2),
@@ -362,7 +415,7 @@ async function runCycle() {
               takeProfit: pos.takeProfit.toFixed(2)
             }));
             await telegram.sendMessage(telegram.formatAlert(
-              `🟢 Compra ${alloc.symbol}\nScore: ${alloc.score}/100\nTendência 4h: ${alloc.trend4h}\nMACD: ${alloc.macd ? (alloc.macd.histogram > 0 ? '📈 Positivo' : '📉 Negativo') : 'N/A'}\nTimeframe: ${pairConfig.interval}\nRSI Buy: ${pairConfig.rsiBuy}\nRazão: ${reason}\nNotícias: ${news.signal}\nCapital: $${safeAllocation.toFixed(2)}`
+              `🟢 Compra ${alloc.symbol}\nScore: ${alloc.score}/100\nTendência 4h: ${alloc.trend4h}\nMACD: ${alloc.macd ? (alloc.macd.histogram > 0 ? '📈 Positivo' : '📉 Negativo') : 'N/A'}\nBB %B: ${alloc.bb ? alloc.bb.percentB.toFixed(3) : 'N/A'}\nATR: ${atrPctStr} (alocação: ${allocPct})\nPadrão: ${alloc.candlePattern}\nRSI Buy: ${pairConfig.rsiBuy}\nRazão: ${reason}\nCapital: $${dynamicAllocation.toFixed(2)}`
             ));
           } catch (e) {
             logger.error(`Erro ao comprar ${alloc.symbol}`, { message: e.message });
@@ -445,10 +498,12 @@ Pares: ${PAIRS.join(', ')}
 BTC → 1h | RSI 35/65
 ETH → 30min | RSI 35/65
 BNB → 1h | RSI 40/60
-Stop-Loss: 2.5% | Take-Profit: 5%
 Score mínimo: ${MIN_SCORE_TO_BUY}/100
 Cooldown após SL: 2 horas
-Confirmação: MACD + Tendência 4h
+Indicadores: RSI + SMA + MACD + BB + ATR
+Confirmação: Tendência 4h + Padrões de velas
+Stop-Loss: Adaptativo (2x ATR)
+Position Sizing: Dinâmico por volatilidade
 Posições em memória: ${PAIRS.filter(p => positions[p].inPosition).join(', ') || 'nenhuma'}`);
 
   runCycle();
