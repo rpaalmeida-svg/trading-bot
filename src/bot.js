@@ -23,6 +23,9 @@ const SEMESTRE_MS = 6 * 30 * 24 * 60 * 60 * 1000;
 
 let initialBalance = null;
 
+// Cache de últimos preços conhecidos — evita $0 no dashboard quando a API falha
+const lastKnownPrices = {};
+
 const positions = {};
 PAIRS.forEach(p => {
   positions[p] = {
@@ -213,7 +216,7 @@ function sendDashboardUpdate(balance, validAnalyses, sentiment, news, stats) {
       initialBalance: initialBalance ? initialBalance.toFixed(2) : balance.toFixed(2),
       balanceChange,
       balanceChangePct,
-      price: btcData ? btcData.currentPrice.toFixed(2) : '0',
+      price: btcData ? btcData.currentPrice.toFixed(2) : (lastKnownPrices['BTCUSDT'] ? lastKnownPrices['BTCUSDT'].toFixed(2) : '0'),
       rsi: btcData && btcData.rsi ? btcData.rsi.toFixed(2) : 'N/A',
       smaFast: btcData && btcData.smaFast ? btcData.smaFast.toFixed(2) : 'N/A',
       smaSlow: btcData && btcData.smaSlow ? btcData.smaSlow.toFixed(2) : 'N/A',
@@ -225,26 +228,38 @@ function sendDashboardUpdate(balance, validAnalyses, sentiment, news, stats) {
       newsScore: news.sentimentScore,
       newsTitles: news.recentTitles,
       stats,
-      pairs: PAIRS.map(p => ({
-        symbol: p,
-        inPosition: positions[p].inPosition,
-        entryPrice: positions[p].entryPrice,
-        stopLoss: positions[p].stopLoss,
-        takeProfit: positions[p].takeProfit,
-        score: validAnalyses.find(a => a.symbol === p)?.score || 0,
-        technicalScore: validAnalyses.find(a => a.symbol === p)?.technicalScore || 0,
-        macroScore: validAnalyses.find(a => a.symbol === p)?.macroScore || 0,
-        rsi: validAnalyses.find(a => a.symbol === p)?.rsi?.toFixed(2) || 'N/A',
-        signal: validAnalyses.find(a => a.symbol === p)?.signal || 'WAIT',
-        currentPrice: validAnalyses.find(a => a.symbol === p)?.currentPrice || 0,
-        interval: PAIR_CONFIG[p].interval,
-        trend4h: validAnalyses.find(a => a.symbol === p)?.trend4h || 'N/A',
-        atrPct: validAnalyses.find(a => a.symbol === p)?.atrData?.atrPct?.toFixed(2) || 'N/A',
-        bbPercentB: validAnalyses.find(a => a.symbol === p)?.bb?.percentB?.toFixed(3) || 'N/A',
-        candlePattern: validAnalyses.find(a => a.symbol === p)?.candlePattern || 'NONE',
-        highestPrice: positions[p].highestPrice,
-        cooldownRestante: positions[p].lastStopLoss ? Math.max(0, Math.round((COOLDOWN_MS - (Date.now() - positions[p].lastStopLoss)) / 60000)) : 0
-      }))
+      pairs: PAIRS.map(p => {
+        const analysis = validAnalyses.find(a => a.symbol === p);
+
+        // Actualizar cache com último preço conhecido
+        if (analysis && analysis.currentPrice) {
+          lastKnownPrices[p] = analysis.currentPrice;
+        }
+        const displayPrice = lastKnownPrices[p] || 0;
+
+        return {
+          symbol: p,
+          inPosition: positions[p].inPosition,
+          entryPrice: positions[p].entryPrice,
+          stopLoss: positions[p].stopLoss,
+          takeProfit: positions[p].takeProfit,
+          score: analysis?.score || 0,
+          technicalScore: analysis?.technicalScore || 0,
+          macroScore: analysis?.macroScore || 0,
+          rsi: analysis?.rsi?.toFixed(2) || 'N/A',
+          signal: analysis?.signal || 'WAIT',
+          currentPrice: displayPrice,
+          interval: PAIR_CONFIG[p].interval,
+          trend4h: analysis?.trend4h || 'N/A',
+          atrPct: analysis?.atrData?.atrPct?.toFixed(2) || 'N/A',
+          bbPercentB: analysis?.bb?.percentB?.toFixed(3) || 'N/A',
+          candlePattern: analysis?.candlePattern || 'NONE',
+          highestPrice: positions[p].highestPrice,
+          cooldownRestante: positions[p].lastStopLoss
+            ? Math.max(0, Math.round((COOLDOWN_MS - (Date.now() - positions[p].lastStopLoss)) / 60000))
+            : 0
+        };
+      })
     });
   } catch (err) {
     logger.error('Erro ao actualizar dashboard', { message: err.message });

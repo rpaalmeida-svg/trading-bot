@@ -81,6 +81,7 @@ function calculateBollingerBands(prices, period = 20, stdDev = 2) {
 // Mede a volatilidade real do mercado
 // Usado para: position sizing dinâmico e stop-loss adaptativo
 // candles = array de { high, low, close }
+// NOTA: sanitização de wicks impossíveis (problema comum na Binance Testnet)
 function calculateATR(candles, period = 14) {
   if (!candles || candles.length < period + 1) return null;
 
@@ -89,6 +90,12 @@ function calculateATR(candles, period = 14) {
     const high = candles[i].high;
     const low = candles[i].low;
     const prevClose = candles[i - 1].close;
+
+    // Sanidade: ignorar velas com wicks impossíveis (> 15% do preço)
+    // A Binance Testnet gera dados sintéticos com ranges absurdos
+    const rangeRatio = (high - low) / prevClose;
+    if (rangeRatio > 0.15) continue;
+
     const tr = Math.max(
       high - low,
       Math.abs(high - prevClose),
@@ -97,11 +104,17 @@ function calculateATR(candles, period = 14) {
     trueRanges.push(tr);
   }
 
-  const slice = trueRanges.slice(-period);
-  const atr = slice.reduce((a, b) => a + b, 0) / period;
-  const atrPct = (atr / candles[candles.length - 1].close) * 100;
+  if (trueRanges.length < period) return null;
 
-  return { atr, atrPct };
+  const slice = trueRanges.slice(-period);
+  const atr = slice.reduce((a, b) => a + b, 0) / slice.length;
+  const currentPrice = candles[candles.length - 1].close;
+  const atrPct = (atr / currentPrice) * 100;
+
+  // Cap de segurança — ATR nunca deve exceder 8% em dados válidos
+  const atrPctFinal = Math.min(atrPct, 8.0);
+
+  return { atr, atrPct: atrPctFinal };
 }
 
 // --- POSITION SIZING DINÂMICO ---
@@ -151,7 +164,6 @@ function detectCandlePattern(candles) {
 
   const last = candles[candles.length - 1];
   const prev = candles[candles.length - 2];
-  const prev2 = candles[candles.length - 3];
 
   const body = Math.abs(last.close - last.open);
   const totalRange = last.high - last.low;
