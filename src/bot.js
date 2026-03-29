@@ -169,13 +169,8 @@ async function analyzePair(symbol, sentiment, macroData) {
     const avgVolume = volume / 24;
     const volumeRatio = avgVolume > 0 ? volume / avgVolume : 1;
 
-    // Score técnico
     const technicalScore = rsi ? calcScore(rsi, sentiment.value, volumeRatio, pairConfig.rsiBuy) : 0;
-
-    // Score macro
     const macroScore = calcMacroScore(macroData);
-
-    // Score composto — decisão final
     const score = calcCompositeScore(technicalScore, macroScore);
 
     logger.info(`Análise ${symbol}`, {
@@ -231,7 +226,6 @@ function sendDashboardUpdate(balance, validAnalyses, sentiment, news, stats) {
       pairs: PAIRS.map(p => {
         const analysis = validAnalyses.find(a => a.symbol === p);
 
-        // Actualizar cache com último preço conhecido
         if (analysis && analysis.currentPrice) {
           lastKnownPrices[p] = analysis.currentPrice;
         }
@@ -351,11 +345,11 @@ async function runCycle() {
     const shouldStop = risk.checkDailyLoss(balance);
     if (shouldStop) {
       await telegram.sendMessage(telegram.formatAlert('🛑 Limite de perda diária atingido — bot pausado!'));
-      sendDashboardUpdate(balance, [], sentiment, news, getStats());
+      const statsStop = await getStats();
+      sendDashboardUpdate(balance, [], sentiment, news, statsStop);
       return;
     }
 
-    // Bloquear compras se macro extremamente negativo
     if (news.blockBuying) {
       logger.warn('Macro bloqueou todas as compras', { score: news.sentimentScore });
       await telegram.sendMessage(telegram.formatAlert(
@@ -369,7 +363,8 @@ async function runCycle() {
     const analyses = await Promise.all(PAIRS.map(symbol => analyzePair(symbol, sentiment, news)));
     validAnalyses = analyses.filter(a => a !== null);
 
-    sendDashboardUpdate(balance, validAnalyses, sentiment, news, getStats());
+    const statsFirst = await getStats();
+    sendDashboardUpdate(balance, validAnalyses, sentiment, news, statsFirst);
 
     // Gerir posições abertas
     for (const data of validAnalyses) {
@@ -378,7 +373,6 @@ async function runCycle() {
 
       const { currentPrice, symbol, atrData } = data;
 
-      // Actualizar preço máximo
       if (!pos.highestPrice || currentPrice > pos.highestPrice) {
         pos.highestPrice = currentPrice;
         await persistPositions();
@@ -402,7 +396,7 @@ async function runCycle() {
       if (trailingTPActive && currentPrice <= trailingTPStop) {
         try {
           await placeOrder(symbol, 'SELL', pos.quantity);
-          const trade = recordSell(symbol, currentPrice, 'TRAILING_TP');
+          const trade = await recordSell(symbol, currentPrice, 'TRAILING_TP');
           const profit = trade ? trade.profit : 0;
           const maxGainPct = (gainFromEntry * 100).toFixed(2);
           await telegram.sendMessage(telegram.formatTrade('SELL', { symbol, price: currentPrice.toFixed(2), quantity: pos.quantity, profit: profit.toFixed(2) }));
@@ -423,7 +417,7 @@ async function runCycle() {
       if (currentPrice <= pos.stopLoss) {
         try {
           await placeOrder(symbol, 'SELL', pos.quantity);
-          const trade = recordSell(symbol, currentPrice, 'STOP_LOSS');
+          const trade = await recordSell(symbol, currentPrice, 'STOP_LOSS');
           const profit = trade ? trade.profit : 0;
           await telegram.sendMessage(telegram.formatTrade('SELL', { symbol, price: currentPrice.toFixed(2), quantity: pos.quantity, profit: profit.toFixed(2) }));
           await telegram.sendMessage(telegram.formatAlert(`🛑 Stop-Loss activado em ${symbol}!\nResultado: ${profit >= 0 ? '+' : ''}$${profit.toFixed(2)}\n⏳ Cooldown de 2h activo.`));
@@ -438,7 +432,7 @@ async function runCycle() {
       if (currentPrice >= pos.takeProfit) {
         try {
           await placeOrder(symbol, 'SELL', pos.quantity);
-          const trade = recordSell(symbol, currentPrice, 'TAKE_PROFIT');
+          const trade = await recordSell(symbol, currentPrice, 'TAKE_PROFIT');
           const profit = trade ? trade.profit : 0;
           await telegram.sendMessage(telegram.formatTrade('SELL', { symbol, price: currentPrice.toFixed(2), quantity: pos.quantity, profit: profit.toFixed(2) }));
           await telegram.sendMessage(telegram.formatAlert(`🎯 Take-Profit atingido em ${symbol}!\nResultado: +$${profit.toFixed(2)}`));
@@ -453,7 +447,7 @@ async function runCycle() {
       if (data.signal === 'SELL' && news.signal === 'NEGATIVE') {
         try {
           await placeOrder(symbol, 'SELL', pos.quantity);
-          const trade = recordSell(symbol, currentPrice, 'SIGNAL');
+          const trade = await recordSell(symbol, currentPrice, 'SIGNAL');
           const profit = trade ? trade.profit : 0;
           await telegram.sendMessage(telegram.formatTrade('SELL', { symbol, price: currentPrice.toFixed(2), quantity: pos.quantity, profit: profit.toFixed(2) }));
           await telegram.sendMessage(telegram.formatAlert(`⚠️ Venda antecipada em ${symbol}\nSinal técnico + macro negativo\nResultado: ${profit >= 0 ? '+' : ''}$${profit.toFixed(2)}`));
@@ -543,7 +537,7 @@ async function runCycle() {
             pos.highestPrice = alloc.currentPrice;
             await persistPositions();
 
-            recordBuy(alloc.symbol, alloc.currentPrice, qty, pos.stopLoss, pos.takeProfit);
+            await recordBuy(alloc.symbol, alloc.currentPrice, qty, pos.stopLoss, pos.takeProfit);
 
             const reason = getReason(alloc.score, alloc.rsi, sentiment.value, news);
             const atrPctStr = alloc.atrData ? alloc.atrData.atrPct.toFixed(2) + '%' : 'N/A';
@@ -575,9 +569,9 @@ async function runCycle() {
       }
     }
 
-    sendDashboardUpdate(balance, validAnalyses, sentiment, news, getStats());
+    const stats = await getStats();
+    sendDashboardUpdate(balance, validAnalyses, sentiment, news, stats);
 
-    const stats = getStats();
     const balanceChange = initialBalance ? (balance - initialBalance).toFixed(2) : 0;
     const balanceChangePct = initialBalance ? (((balance - initialBalance) / initialBalance) * 100).toFixed(2) : 0;
 
@@ -610,7 +604,8 @@ async function runCycle() {
     logger.error('Erro no ciclo', { message: err.message });
     await telegram.sendMessage(telegram.formatAlert(`Erro no bot: ${err.message}`));
     if (balance > 0) {
-      sendDashboardUpdate(balance, validAnalyses, sentiment, news, getStats());
+      const statsErr = await getStats();
+      sendDashboardUpdate(balance, validAnalyses, sentiment, news, statsErr);
     }
   }
 }
