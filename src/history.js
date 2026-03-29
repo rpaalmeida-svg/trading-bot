@@ -1,24 +1,22 @@
-const fs = require('fs');
-const path = require('path');
+const { saveState, loadState } = require('./database');
 
-const HISTORY_FILE = path.join(__dirname, '../logs/trades.json');
+const HISTORY_KEY = 'trades_history';
 
-function loadHistory() {
+async function loadHistory() {
   try {
-    if (!fs.existsSync(HISTORY_FILE)) return [];
-    const data = fs.readFileSync(HISTORY_FILE, 'utf8');
-    return JSON.parse(data);
+    const data = await loadState(HISTORY_KEY);
+    return Array.isArray(data) ? data : [];
   } catch {
     return [];
   }
 }
 
-function saveHistory(trades) {
-  fs.writeFileSync(HISTORY_FILE, JSON.stringify(trades, null, 2));
+async function saveHistory(trades) {
+  await saveState(HISTORY_KEY, trades);
 }
 
-function recordBuy(symbol, price, quantity, stopLoss, takeProfit) {
-  const trades = loadHistory();
+async function recordBuy(symbol, price, quantity, stopLoss, takeProfit) {
+  const trades = await loadHistory();
   const trade = {
     id: Date.now(),
     symbol,
@@ -36,12 +34,12 @@ function recordBuy(symbol, price, quantity, stopLoss, takeProfit) {
     closeReason: null
   };
   trades.push(trade);
-  saveHistory(trades);
+  await saveHistory(trades);
   return trade;
 }
 
-function recordSell(symbol, closePrice, reason = 'TAKE_PROFIT') {
-  const trades = loadHistory();
+async function recordSell(symbol, closePrice, reason = 'TAKE_PROFIT') {
+  const trades = await loadHistory();
   const openTrade = trades
     .filter(t => t.symbol === symbol && !t.closed)
     .sort((a, b) => b.id - a.id)[0];
@@ -58,12 +56,12 @@ function recordSell(symbol, closePrice, reason = 'TAKE_PROFIT') {
   openTrade.profit = parseFloat(profit.toFixed(2));
   openTrade.profitPercent = parseFloat(profitPercent.toFixed(2));
 
-  saveHistory(trades);
+  await saveHistory(trades);
   return openTrade;
 }
 
-function getStats() {
-  const trades = loadHistory();
+async function getStats() {
+  const trades = await loadHistory();
   const closed = trades.filter(t => t.closed);
 
   if (closed.length === 0) {
