@@ -3,8 +3,8 @@ const logger = require('./logger');
 const PAIRS = ['BTCUSDT', 'ETHUSDT', 'BNBUSDT'];
 
 const PAIR_CONFIG = {
-  BTCUSDT: { interval: '1h',  rsiBuy: 35, rsiSell: 65, stopLoss: 0.025, takeProfit: 0.05 },
-  ETHUSDT: { interval: '30m', rsiBuy: 35, rsiSell: 65, stopLoss: 0.025, takeProfit: 0.05 },
+  BTCUSDT: { interval: '30m', rsiBuy: 40, rsiSell: 60, stopLoss: 0.025, takeProfit: 0.05 },
+  ETHUSDT: { interval: '1h',  rsiBuy: 35, rsiSell: 65, stopLoss: 0.025, takeProfit: 0.05 },
   BNBUSDT: { interval: '1h',  rsiBuy: 40, rsiSell: 60, stopLoss: 0.025, takeProfit: 0.05 },
 };
 
@@ -38,38 +38,32 @@ function calcScore(rsi, fearGreed, volumeRatio, rsiBuy) {
 
 // Score macro — estado do mundo
 function calcMacroScore(macroData) {
-  if (!macroData || !macroData.raw) return 50; // neutro se sem dados
+  if (!macroData || !macroData.raw) return 50;
 
   const { fearGreed, fgTrend, btcDominance, marketCapChange, btc7d, distanceFromAth } = macroData.raw;
-  let score = 50; // base neutra
+  let score = 50;
 
-  // Fear & Greed
   if (fearGreed <= 20) score += 20;
   else if (fearGreed <= 35) score += 10;
   else if (fearGreed >= 75) score -= 20;
   else if (fearGreed >= 60) score -= 10;
 
-  // Tendência de sentimento
   if (fgTrend > 8) score += 15;
   else if (fgTrend < -8) score -= 15;
 
-  // Market cap change 24h
   if (marketCapChange > 3) score += 15;
   else if (marketCapChange > 1) score += 5;
   else if (marketCapChange < -3) score -= 20;
   else if (marketCapChange < -1) score -= 10;
 
-  // BTC performance 7 dias
   if (btc7d > 5) score += 10;
   else if (btc7d < -10) score -= 20;
   else if (btc7d < -5) score -= 10;
 
-  // Distância do ATH
   if (distanceFromAth < -50) score += 15;
   else if (distanceFromAth < -30) score += 8;
   else if (distanceFromAth > -5) score -= 10;
 
-  // BTC dominance
   if (btcDominance > 60) score -= 8;
   else if (btcDominance < 45) score += 8;
 
@@ -78,7 +72,6 @@ function calcMacroScore(macroData) {
 
 // Score composto — técnico + macro
 function calcCompositeScore(technicalScore, macroScore) {
-  // 60% técnico + 40% macro
   return Math.round(technicalScore * 0.60 + macroScore * 0.40);
 }
 
