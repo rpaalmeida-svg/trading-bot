@@ -20,9 +20,10 @@ const SECRET_KEY = process.env.BINANCE_SECRET_KEY;
 const COOLDOWN_MS = 2 * 60 * 60 * 1000;
 const MIN_SCORE_TO_BUY = 75;
 const SEMESTRE_MS = 6 * 30 * 24 * 60 * 60 * 1000;
+const CYCLE_INTERVAL_MS = 30 * 60 * 1000;
+const CYCLE_LOCK_MS = 25 * 60 * 1000; // lock na BD: bloqueia outros processos por 25 min
 
 let initialBalance = null;
-let cycleRunning = false; // ← Lock: garante que só um ciclo corre de cada vez
 
 // Cache de últimos preços conhecidos — evita $0 no dashboard quando a API falha
 const lastKnownPrices = {};
@@ -322,12 +323,20 @@ async function checkSemestralWithdrawal(balance) {
 }
 
 async function runCycle() {
-  // ← Lock: se um ciclo anterior ainda estiver a correr, salta este
-  if (cycleRunning) {
-    logger.warn('Ciclo anterior ainda a correr — a saltar este intervalo');
-    return;
+  // ← Lock na BD: bloqueia outros processos (ex: durante deploy Railway)
+  try {
+    const lastCycleStart = await loadState('lastCycleStart');
+    const now = Date.now();
+    if (lastCycleStart && (now - lastCycleStart) < CYCLE_LOCK_MS) {
+      logger.warn('Ciclo recente detectado na BD — processo duplicado bloqueado', {
+        minutosAtras: Math.round((now - lastCycleStart) / 60000)
+      });
+      return;
+    }
+    await saveState('lastCycleStart', now);
+  } catch (err) {
+    logger.warn('Erro ao verificar lock de ciclo — a continuar', { message: err.message });
   }
-  cycleRunning = true;
 
   let balance = 0;
   let sentiment = { value: 50, classification: 'Neutral', signal: 'NEUTRAL' };
@@ -615,9 +624,6 @@ async function runCycle() {
       const statsErr = await getStats();
       sendDashboardUpdate(balance, validAnalyses, sentiment, news, statsErr);
     }
-  } finally {
-    // ← Liberta o lock sempre — mesmo em caso de erro
-    cycleRunning = false;
   }
 }
 
@@ -652,8 +658,8 @@ async function start() {
 
   await telegram.sendMessage(`🚀 <b>Trading Bot arrancou!</b>
 Pares: ${PAIRS.join(', ')}
-BTC → 1h | RSI 35/65
-ETH → 30min | RSI 35/65
+BTC → 30min | RSI 40/60
+ETH → 1h | RSI 35/65
 BNB → 1h | RSI 40/60
 Score mínimo: ${MIN_SCORE_TO_BUY}/100
 Cooldown após SL: 2 horas
@@ -666,8 +672,12 @@ Macro Overlay: Fear&Greed + Market Cap + BTC7d + ATH + ETF Flows
 Alerta semestral: 50% lucros activo
 Posições em memória: ${PAIRS.filter(p => positions[p].inPosition).join(', ') || 'nenhuma'}`);
 
-  runCycle();
-  setInterval(runCycle, 30 * 60 * 1000);
+  // Loop recursivo — garante que só corre um ciclo de cada vez
+  async function loop() {
+    await runCycle();
+    setTimeout(loop, CYCLE_INTERVAL_MS);
+  }
+  loop();
 }
 
 module.exports = { start };
