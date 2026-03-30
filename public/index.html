@@ -384,13 +384,13 @@
     createChart("chart-eth", "BINANCE:ETHUSDT", "30");
     createChart("chart-bnb", "BINANCE:BNBUSDT", "60");
 
-    // Formata números com ponto nos milhares e vírgula nos cêntimos (pt-PT)
+    // Formata números: ponto nos milhares, vírgula nos cêntimos — sempre consistente
     function fmt(n, decimals) {
       var d = decimals !== undefined ? decimals : 2;
-      return parseFloat(n).toLocaleString('pt-PT', {
-        minimumFractionDigits: d,
-        maximumFractionDigits: d
-      });
+      var fixed = parseFloat(n).toFixed(d);
+      var parts = fixed.split('.');
+      parts[0] = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+      return d > 0 ? parts[0] + ',' + parts[1] : parts[0];
     }
 
     const socket = io();
