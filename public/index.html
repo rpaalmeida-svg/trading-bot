@@ -22,7 +22,6 @@
       --red: #f85149;
       --yellow: #d29922;
       --orange: #e3832a;
-      --purple: #a371f7;
       --font-mono: 'JetBrains Mono', monospace;
       --font: 'Inter', sans-serif;
     }
@@ -273,7 +272,6 @@
     <div class="charts-section">
       <div class="charts-section-title">📡 Mercado ao Vivo — TradingView</div>
       <div class="charts-grid">
-
         <div class="chart-card">
           <div class="chart-header">
             <div class="chart-title">BTC / USDT</div>
@@ -281,7 +279,6 @@
           </div>
           <div class="chart-body" id="chart-btc"></div>
         </div>
-
         <div class="chart-card">
           <div class="chart-header">
             <div class="chart-title">ETH / USDT</div>
@@ -289,7 +286,6 @@
           </div>
           <div class="chart-body" id="chart-eth"></div>
         </div>
-
         <div class="chart-card">
           <div class="chart-header">
             <div class="chart-title">BNB / USDT</div>
@@ -297,7 +293,6 @@
           </div>
           <div class="chart-body" id="chart-bnb"></div>
         </div>
-
       </div>
     </div>
 
@@ -316,15 +311,10 @@
             <div class="fg-marker" id="fg-marker" style="left:50%"></div>
           </div>
           <div class="fg-labels">
-            <span>Medo Extremo</span>
-            <span>Medo</span>
-            <span>Neutro</span>
-            <span>Ganância</span>
-            <span>Ganância Extrema</span>
+            <span>Medo Extremo</span><span>Medo</span><span>Neutro</span><span>Ganância</span><span>Ganância Extrema</span>
           </div>
         </div>
       </div>
-
       <div class="section">
         <div class="section-title">🌍 Sentimento do Mercado</div>
         <div class="macro-grid" id="news-titles">
@@ -394,11 +384,20 @@
     createChart("chart-eth", "BINANCE:ETHUSDT", "30");
     createChart("chart-bnb", "BINANCE:BNBUSDT", "60");
 
+    // Formata números com ponto nos milhares e vírgula nos cêntimos (pt-PT)
+    function fmt(n, decimals) {
+      var d = decimals !== undefined ? decimals : 2;
+      return parseFloat(n).toLocaleString('pt-PT', {
+        minimumFractionDigits: d,
+        maximumFractionDigits: d
+      });
+    }
+
     const socket = io();
     const logs = [];
 
     function rsiColor(v) {
-      const n = parseFloat(v);
+      var n = parseFloat(v);
       if (n < 35) return 'green';
       if (n > 65) return 'red';
       return 'yellow';
@@ -417,39 +416,39 @@
       return 'red';
     }
 
-    socket.on('update', (data) => {
+    socket.on('update', function(data) {
       if (!data || !data.balance) return;
 
-      document.getElementById('balance').textContent = '$' + data.balance;
-      document.getElementById('price').textContent = '$' + (data.price || '—');
+      document.getElementById('balance').textContent = '$' + fmt(data.balance);
+      document.getElementById('price').textContent = '$' + fmt(data.price || 0);
 
-      const rsiEl = document.getElementById('rsi');
+      var rsiEl = document.getElementById('rsi');
       rsiEl.textContent = data.rsi || '—';
       rsiEl.className = 'metric-value ' + rsiColor(data.rsi);
 
-      const fg = parseInt(data.fearGreed);
-      const fgEl = document.getElementById('fg-value');
+      var fg = parseInt(data.fearGreed);
+      var fgEl = document.getElementById('fg-value');
       fgEl.textContent = isNaN(fg) ? '—' : fg;
       fgEl.className = 'metric-value ' + fgColor(fg);
       document.getElementById('fg-label').textContent = data.fearGreedLabel || '—';
       if (!isNaN(fg)) document.getElementById('fg-marker').style.left = fg + '%';
 
-      const change = parseFloat(data.balanceChange || 0);
-      const changePct = parseFloat(data.balanceChangePct || 0);
-      const changeEl = document.getElementById('balance-change');
-      const changePctEl = document.getElementById('balance-change-pct');
-      changeEl.textContent = (change >= 0 ? '+' : '') + '$' + change.toFixed(2);
+      var change = parseFloat(data.balanceChange || 0);
+      var changePct = parseFloat(data.balanceChangePct || 0);
+      var changeEl = document.getElementById('balance-change');
+      var changePctEl = document.getElementById('balance-change-pct');
+      changeEl.textContent = (change >= 0 ? '+' : '') + '$' + fmt(change);
       changeEl.style.color = change >= 0 ? 'var(--green)' : 'var(--red)';
-      changePctEl.textContent = (changePct >= 0 ? '+' : '') + changePct + '%';
+      changePctEl.textContent = (changePct >= 0 ? '+' : '') + fmt(changePct) + '%';
       changePctEl.style.color = changePct >= 0 ? 'var(--green)' : 'var(--red)';
-      document.getElementById('initial-balance').textContent = '$' + (data.initialBalance || '—');
+      document.getElementById('initial-balance').textContent = '$' + fmt(data.initialBalance || 0);
       document.getElementById('variation-card').style.borderColor = change >= 0 ? 'var(--green)' : 'var(--red)';
 
       if (data.news) {
-        const newsEmoji = data.news === 'POSITIVE' ? '📈' : data.news === 'NEGATIVE' ? '📉' : '📊';
-        const newsColor = data.news === 'POSITIVE' ? 'var(--green)' : data.news === 'NEGATIVE' ? 'var(--red)' : 'var(--yellow)';
+        var newsEmoji = data.news === 'POSITIVE' ? '📈' : data.news === 'NEGATIVE' ? '📉' : '📊';
+        var newsColor = data.news === 'POSITIVE' ? 'var(--green)' : data.news === 'NEGATIVE' ? 'var(--red)' : 'var(--yellow)';
         document.getElementById('news-emoji').textContent = newsEmoji;
-        const newsSignalEl = document.getElementById('news-signal');
+        var newsSignalEl = document.getElementById('news-signal');
         newsSignalEl.textContent = data.news;
         newsSignalEl.style.color = newsColor;
         document.getElementById('news-score').textContent = data.newsScore;
@@ -458,61 +457,61 @@
         document.getElementById('news-card-score').textContent = 'score: ' + data.newsScore;
 
         if (data.newsTitles && data.newsTitles.length > 0) {
-          document.getElementById('news-titles').innerHTML = data.newsTitles.map(t =>
-            '<div class="macro-item"><span class="icon">📌</span><span>' + t + '</span></div>'
-          ).join('');
+          document.getElementById('news-titles').innerHTML = data.newsTitles.map(function(t) {
+            return '<div class="macro-item"><span class="icon">📌</span><span>' + t + '</span></div>';
+          }).join('');
         } else {
           document.getElementById('news-titles').innerHTML = '<div style="color:var(--muted);font-size:0.82rem;">Sem dados recentes</div>';
         }
       }
 
-      const stats = data.stats || {};
-      const pnl = stats.totalProfit || 0;
-      const pnlEl = document.getElementById('pnl-total');
-      pnlEl.textContent = (pnl >= 0 ? '+' : '') + '$' + parseFloat(pnl).toFixed(2);
+      var stats = data.stats || {};
+      var pnl = stats.totalProfit || 0;
+      var pnlEl = document.getElementById('pnl-total');
+      pnlEl.textContent = (pnl >= 0 ? '+' : '') + '$' + fmt(pnl);
       pnlEl.className = 'metric-value ' + (pnl >= 0 ? 'green' : 'red');
       document.getElementById('win-rate').textContent = (stats.winRate || 0) + '%';
       document.getElementById('total-trades').textContent = (stats.totalTrades || 0);
       document.getElementById('s-winners').textContent = stats.winners || 0;
       document.getElementById('s-losers').textContent = stats.losers || 0;
-      document.getElementById('s-best').textContent = stats.bestTrade ? '+$' + stats.bestTrade.profit : '—';
-      document.getElementById('s-worst').textContent = stats.worstTrade ? '$' + stats.worstTrade.profit : '—';
+      document.getElementById('s-best').textContent = stats.bestTrade ? '+$' + fmt(stats.bestTrade.profit) : '—';
+      document.getElementById('s-worst').textContent = stats.worstTrade ? '$' + fmt(stats.worstTrade.profit) : '—';
 
       if (stats.recentTrades && stats.recentTrades.length > 0) {
-        document.getElementById('trades-list').innerHTML = stats.recentTrades.map(t =>
-          '<div class="trade-row">' +
+        document.getElementById('trades-list').innerHTML = stats.recentTrades.map(function(t) {
+          return '<div class="trade-row">' +
             '<span class="trade-time">' + new Date(t.closeTimestamp).toLocaleString('pt-PT') + '</span>' +
             '<span class="trade-symbol">' + t.symbol.replace('USDT', '/USDT') + '</span>' +
-            '<span class="trade-prices">$' + parseFloat(t.price).toFixed(2) + ' → $' + parseFloat(t.closePrice).toFixed(2) + '</span>' +
-            '<span class="trade-badge ' + (t.profit >= 0 ? 'badge-win' : 'badge-loss') + '">' + (t.profit >= 0 ? '+' : '') + '$' + parseFloat(t.profit).toFixed(2) + '</span>' +
-          '</div>'
-        ).join('');
+            '<span class="trade-prices">$' + fmt(t.price) + ' → $' + fmt(t.closePrice) + '</span>' +
+            '<span class="trade-badge ' + (t.profit >= 0 ? 'badge-win' : 'badge-loss') + '">' + (t.profit >= 0 ? '+' : '') + '$' + fmt(t.profit) + '</span>' +
+          '</div>';
+        }).join('');
       } else {
         document.getElementById('trades-list').innerHTML = '<div style="color:var(--muted);margin-top:12px;font-size:0.8rem;font-family:var(--font-mono);">Sem trades concluídos ainda</div>';
       }
 
-      const hasPosition = data.pairs && data.pairs.some(p => p.inPosition);
+      var hasPosition = data.pairs && data.pairs.some(function(p) { return p.inPosition; });
       document.getElementById('status-text').textContent = hasPosition
-        ? '🔵 ' + data.pairs.filter(p => p.inPosition).length + ' posição(ões) abertas'
+        ? '🔵 ' + data.pairs.filter(function(p) { return p.inPosition; }).length + ' posição(ões) abertas'
         : '🟢 Bot activo — a monitorizar';
 
       if (data.pairs) {
-        document.getElementById('pairs-grid').innerHTML = data.pairs.map(p => {
-          let positionHTML = '';
+        document.getElementById('pairs-grid').innerHTML = data.pairs.map(function(p) {
+          var positionHTML = '';
           if (p.inPosition && p.entryPrice) {
-            const sl = parseFloat(p.stopLoss);
-            const tp = parseFloat(p.takeProfit);
-            const current = parseFloat(p.currentPrice);
-            const entry = parseFloat(p.entryPrice);
-            const pnlPct = ((current - entry) / entry * 100).toFixed(2);
-            const pnlColor = parseFloat(pnlPct) >= 0 ? 'green' : 'red';
-            const progress = Math.min(100, Math.max(0, ((current - sl) / (tp - sl)) * 100));
-            const progressColor = progress > 66 ? 'var(--green)' : progress > 33 ? 'var(--yellow)' : 'var(--red)';
+            var sl = parseFloat(p.stopLoss);
+            var tp = parseFloat(p.takeProfit);
+            var current = parseFloat(p.currentPrice);
+            var entry = parseFloat(p.entryPrice);
+            var pnlPct = ((current - entry) / entry * 100).toFixed(2);
+            var pnlColor = parseFloat(pnlPct) >= 0 ? 'green' : 'red';
+            var progress = Math.min(100, Math.max(0, ((current - sl) / (tp - sl)) * 100));
+            var progressColor = progress > 66 ? 'var(--green)' : progress > 33 ? 'var(--yellow)' : 'var(--red)';
 
             positionHTML =
               '<div class="pair-item">' +
                 '<div class="plabel">Entrada</div>' +
-                '<div class="pvalue">$' + entry.toFixed(2) + '</div>' +
+                '<div class="pvalue">$' + fmt(entry) + '</div>' +
               '</div>' +
               '<div class="pair-item">' +
                 '<div class="plabel">P&amp;L Actual</div>' +
@@ -520,17 +519,17 @@
               '</div>' +
               '<div class="pair-item">' +
                 '<div class="plabel">Stop-Loss</div>' +
-                '<div class="pvalue red">$' + sl.toFixed(2) + '</div>' +
+                '<div class="pvalue red">$' + fmt(sl) + '</div>' +
               '</div>' +
               '<div class="pair-item">' +
                 '<div class="plabel">Take-Profit</div>' +
-                '<div class="pvalue green">$' + tp.toFixed(2) + '</div>' +
+                '<div class="pvalue green">$' + fmt(tp) + '</div>' +
               '</div>' +
               '<div class="pair-item" style="grid-column:span 2;margin-top:6px;">' +
                 '<div class="progress-labels">' +
-                  '<span style="color:var(--red);">SL $' + sl.toFixed(0) + '</span>' +
-                  '<span style="color:var(--text);font-weight:700;">$' + current.toFixed(0) + '</span>' +
-                  '<span style="color:var(--green);">TP $' + tp.toFixed(0) + '</span>' +
+                  '<span style="color:var(--red);">SL $' + fmt(sl, 0) + '</span>' +
+                  '<span style="color:var(--text);font-weight:700;">$' + fmt(current, 0) + '</span>' +
+                  '<span style="color:var(--green);">TP $' + fmt(tp, 0) + '</span>' +
                 '</div>' +
                 '<div class="progress-bar">' +
                   '<div class="progress-fill" style="width:' + progress + '%;background:' + progressColor + ';"></div>' +
@@ -554,7 +553,7 @@
               '</div>' +
               '<div class="pair-item">' +
                 '<div class="plabel">Preço</div>' +
-                '<div class="pvalue">$' + parseFloat(p.currentPrice || 0).toFixed(2) + '</div>' +
+                '<div class="pvalue">$' + fmt(p.currentPrice || 0) + '</div>' +
               '</div>' +
               '<div class="pair-item">' +
                 '<div class="plabel">Estado</div>' +
@@ -569,19 +568,19 @@
         }).join('');
       }
 
-      const now = new Date().toLocaleTimeString('pt-PT');
-      const openPairs = data.pairs
-        ? data.pairs.filter(p => p.inPosition).map(p =>
-            p.symbol.replace('USDT', '') + ' ' + (p.entryPrice
+      var now = new Date().toLocaleTimeString('pt-PT');
+      var openPairs = data.pairs
+        ? data.pairs.filter(function(p) { return p.inPosition; }).map(function(p) {
+            return p.symbol.replace('USDT', '') + ' ' + (p.entryPrice
               ? ((parseFloat(p.currentPrice) - parseFloat(p.entryPrice)) / parseFloat(p.entryPrice) * 100).toFixed(2) + '%'
-              : '')
-          )
+              : '');
+          })
         : [];
-      logs.unshift({ time: now, msg: 'BTC $' + data.price + ' | RSI ' + data.rsi + ' | F&G ' + data.fearGreed + ' | ' + (openPairs.length > 0 ? '🔵 ' + openPairs.join(' | ') : '⚪ Sem posições') });
+      logs.unshift({ time: now, msg: 'BTC $' + fmt(data.price || 0) + ' | RSI ' + data.rsi + ' | F&G ' + data.fearGreed + ' | ' + (openPairs.length > 0 ? '🔵 ' + openPairs.join(' | ') : '⚪ Sem posições') });
       if (logs.length > 50) logs.pop();
-      document.getElementById('log-list').innerHTML = logs.map(l =>
-        '<li><span>' + l.time + '</span>' + l.msg + '</li>'
-      ).join('');
+      document.getElementById('log-list').innerHTML = logs.map(function(l) {
+        return '<li><span>' + l.time + '</span>' + l.msg + '</li>';
+      }).join('');
 
       document.getElementById('updated').textContent = 'última actualização: ' + new Date().toLocaleString('pt-PT');
     });
