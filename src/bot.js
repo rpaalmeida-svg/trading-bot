@@ -22,6 +22,7 @@ const MIN_SCORE_TO_BUY = 75;
 const SEMESTRE_MS = 6 * 30 * 24 * 60 * 60 * 1000;
 
 let initialBalance = null;
+let cycleRunning = false; // ← Lock: garante que só um ciclo corre de cada vez
 
 // Cache de últimos preços conhecidos — evita $0 no dashboard quando a API falha
 const lastKnownPrices = {};
@@ -321,6 +322,13 @@ async function checkSemestralWithdrawal(balance) {
 }
 
 async function runCycle() {
+  // ← Lock: se um ciclo anterior ainda estiver a correr, salta este
+  if (cycleRunning) {
+    logger.warn('Ciclo anterior ainda a correr — a saltar este intervalo');
+    return;
+  }
+  cycleRunning = true;
+
   let balance = 0;
   let sentiment = { value: 50, classification: 'Neutral', signal: 'NEUTRAL' };
   let news = { signal: 'NEUTRAL', sentimentScore: 0, recentTitles: [], blockBuying: false, raw: {} };
@@ -607,6 +615,9 @@ async function runCycle() {
       const statsErr = await getStats();
       sendDashboardUpdate(balance, validAnalyses, sentiment, news, statsErr);
     }
+  } finally {
+    // ← Liberta o lock sempre — mesmo em caso de erro
+    cycleRunning = false;
   }
 }
 
