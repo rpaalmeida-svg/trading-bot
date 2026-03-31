@@ -21,7 +21,7 @@ const COOLDOWN_MS = 2 * 60 * 60 * 1000;
 const MIN_SCORE_TO_BUY = 75;
 const SEMESTRE_MS = 6 * 30 * 24 * 60 * 60 * 1000;
 const CYCLE_INTERVAL_MS = 30 * 60 * 1000;
-const CYCLE_LOCK_MS = 25 * 60 * 1000; // lock na BD: bloqueia outros processos por 25 min
+const CYCLE_LOCK_MS = 5 * 60 * 1000; // lock na BD: bloqueia outros processos por 25 min
 
 let initialBalance = null;
 
