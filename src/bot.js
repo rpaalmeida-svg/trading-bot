@@ -481,7 +481,7 @@ async function runCycle() {
     const capitalPerPair = maxCapital / PAIRS.length;
     const now = Date.now();
 
-    if (capitalPerPair < 10) {
+    if (capitalPerPair < 5) {
       logger.warn('Capital insuficiente por par', { capitalPerPair });
     } else if (openCount < PAIRS.length && balance > 10 && !news.blockBuying) {
       if (news.signal === 'NEGATIVE') {
