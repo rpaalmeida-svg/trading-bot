@@ -11,6 +11,13 @@ const PAIR_CONFIG = {
 const MIN_SCORE_TO_BUY = 75;
 const MIN_SCORE_SECOND = 80;
 
+// Máximo de posições simultâneas
+// Com contas pequenas (<$50), concentrar capital é mais eficiente
+const MAX_POSITIONS = 2;
+
+// Mínimo por trade — Binance aceita ~$5 notional na maioria dos pares
+const MIN_TRADE_AMOUNT = 5;
+
 // Score técnico — indicadores do par
 function calcScore(rsi, fearGreed, volumeRatio, rsiBuy) {
   const rsiScore = rsi <= rsiBuy ? 100
@@ -75,7 +82,9 @@ function calcCompositeScore(technicalScore, macroScore) {
   return Math.round(technicalScore * 0.60 + macroScore * 0.40);
 }
 
-function allocateCapital(signals, totalCapital) {
+// Alocação de capital — ajustada para contas pequenas
+// maxSlots: quantas posições ainda podemos abrir
+function allocateCapital(signals, totalCapital, maxSlots = MAX_POSITIONS) {
   const candidates = signals
     .filter(s => s.score >= MIN_SCORE_TO_BUY)
     .sort((a, b) => b.score - a.score);
@@ -85,7 +94,20 @@ function allocateCapital(signals, totalCapital) {
     return [];
   }
 
-  if (candidates.length === 1) {
+  // Limitar ao número de slots disponíveis
+  const slotsAvailable = Math.min(candidates.length, maxSlots);
+
+  // Conta pequena (<$50): concentrar no melhor par
+  if (totalCapital < 50) {
+    const selected = candidates.slice(0, Math.min(slotsAvailable, 1));
+    return selected.map(s => ({
+      ...s,
+      allocation: totalCapital * 0.95 // 95% do capital disponível no melhor par
+    }));
+  }
+
+  // Conta normal: distribuir entre os melhores
+  if (slotsAvailable === 1) {
     return [{ ...candidates[0], allocation: totalCapital * 0.95 }];
   }
 
@@ -122,5 +144,7 @@ module.exports = {
   calcCompositeScore,
   allocateCapital,
   getReason,
-  MIN_SCORE_TO_BUY
+  MIN_SCORE_TO_BUY,
+  MAX_POSITIONS,
+  MIN_TRADE_AMOUNT
 };

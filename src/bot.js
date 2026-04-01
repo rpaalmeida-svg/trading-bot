@@ -8,7 +8,7 @@ const strategy = require('./strategy');
 const risk = require('./risk');
 const telegram = require('./telegram');
 const { getFearGreedIndex, getEmoji } = require('./sentiment');
-const { PAIRS, PAIR_CONFIG, calcScore, calcMacroScore, calcCompositeScore, allocateCapital, getReason } = require('./portfolio');
+const { PAIRS, PAIR_CONFIG, calcScore, calcMacroScore, calcCompositeScore, allocateCapital, getReason, MIN_SCORE_TO_BUY, MAX_POSITIONS, MIN_TRADE_AMOUNT } = require('./portfolio');
 const { recordBuy, recordSell, getStats } = require('./history');
 const { getNewsSentiment } = require('./news');
 const { initDB, saveState, loadState } = require('./database');
@@ -18,10 +18,9 @@ const BASE_URL = 'https://api.binance.com/api';
 const API_KEY = process.env.BINANCE_API_KEY;
 const SECRET_KEY = process.env.BINANCE_SECRET_KEY;
 const COOLDOWN_MS = 2 * 60 * 60 * 1000;
-const MIN_SCORE_TO_BUY = 75;
 const SEMESTRE_MS = 6 * 30 * 24 * 60 * 60 * 1000;
 const CYCLE_INTERVAL_MS = 30 * 60 * 1000;
-const CYCLE_LOCK_MS = 2 * 60 * 1000; // lock na BD: bloqueia outros processos por 2 min
+const CYCLE_LOCK_MS = 2 * 60 * 1000;
 
 let initialBalance = null;
 
@@ -70,8 +69,8 @@ async function getBalance() {
     headers: { 'X-MBX-APIKEY': API_KEY },
     params: { timestamp, recvWindow, signature }
   });
-  const usdt = res.data.balances.find(b => b.asset === 'USDC');
-  return parseFloat(usdt?.free || 0);
+  const usdc = res.data.balances.find(b => b.asset === 'USDC');
+  return parseFloat(usdc?.free || 0);
 }
 
 async function getPrice(symbol) {
@@ -206,14 +205,17 @@ function sendDashboardUpdate(balance, validAnalyses, sentiment, news, stats) {
   try {
     const balanceChange = initialBalance ? (balance - initialBalance).toFixed(2) : 0;
     const balanceChangePct = initialBalance ? (((balance - initialBalance) / initialBalance) * 100).toFixed(2) : 0;
-    const btcData = validAnalyses.find(a => a.symbol === 'BTCUSDT');
+
+    // FIX: era BTCUSDT — corrigido para BTCUSDC
+    const btcData = validAnalyses.find(a => a.symbol === 'BTCUSDC');
 
     updateDashboard({
       balance: balance.toFixed(2),
       initialBalance: initialBalance ? initialBalance.toFixed(2) : balance.toFixed(2),
       balanceChange,
       balanceChangePct,
-      price: btcData ? btcData.currentPrice.toFixed(2) : (lastKnownPrices['BTCUSDT'] ? lastKnownPrices['BTCUSDT'].toFixed(2) : '0'),
+      // FIX: era BTCUSDT — corrigido para BTCUSDC
+      price: btcData ? btcData.currentPrice.toFixed(2) : (lastKnownPrices['BTCUSDC'] ? lastKnownPrices['BTCUSDC'].toFixed(2) : '0'),
       rsi: btcData && btcData.rsi ? btcData.rsi.toFixed(2) : 'N/A',
       smaFast: btcData && btcData.smaFast ? btcData.smaFast.toFixed(2) : 'N/A',
       smaSlow: btcData && btcData.smaSlow ? btcData.smaSlow.toFixed(2) : 'N/A',
@@ -307,7 +309,7 @@ async function checkSemestralWithdrawal(balance) {
         `━━━━━━━━━━━━━━━━━━\n\n` +
         `📱 Como levantar:\n` +
         `1. Abre a app Binance\n` +
-        `2. Converte USDT → EUR\n` +
+        `2. Converte USDC → EUR\n` +
         `3. Levanta para o teu IBAN\n\n` +
         `⏰ Próxima revisão: daqui a 6 meses`
       ));
@@ -323,7 +325,7 @@ async function checkSemestralWithdrawal(balance) {
 }
 
 async function runCycle() {
-  // ← Lock na BD: bloqueia outros processos (ex: durante deploy Railway)
+  // Lock na BD: bloqueia outros processos (ex: durante deploy Railway)
   try {
     const lastCycleStart = await loadState('lastCycleStart');
     const now = Date.now();
@@ -475,15 +477,20 @@ async function runCycle() {
       }
     }
 
-    // Novas compras
+    // ─────────────────────────────────────────────────────
+    // NOVAS COMPRAS — lógica reescrita para contas pequenas
+    // ─────────────────────────────────────────────────────
     const openCount = PAIRS.filter(p => positions[p].inPosition).length;
     const maxCapital = parseFloat(process.env.MAX_CAPITAL) || balance;
-    const capitalPerPair = maxCapital / PAIRS.length;
+    const slotsAvailable = MAX_POSITIONS - openCount;
     const now = Date.now();
 
-    if (capitalPerPair < 5) {
-      logger.warn('Capital insuficiente por par', { capitalPerPair });
-    } else if (openCount < PAIRS.length && balance > 10 && !news.blockBuying) {
+    // Capital disponível = min(saldo, MAX_CAPITAL) — NÃO dividir por total de pares
+    const availableCapital = Math.min(balance, maxCapital);
+
+    if (availableCapital < MIN_TRADE_AMOUNT) {
+      logger.warn('Capital insuficiente para qualquer trade', { availableCapital: availableCapital.toFixed(2), minimo: MIN_TRADE_AMOUNT });
+    } else if (slotsAvailable > 0 && balance > MIN_TRADE_AMOUNT && !news.blockBuying) {
       if (news.signal === 'NEGATIVE') {
         logger.warn('Macro negativo — compras pausadas', { score: news.sentimentScore });
         await telegram.sendMessage(telegram.formatAlert(
@@ -525,17 +532,33 @@ async function runCycle() {
           return true;
         });
 
-        const allocations = allocateCapital(pairsWithoutPosition, capitalPerPair * pairsWithoutPosition.length);
+        // Passar capital disponível e slots — allocateCapital decide a distribuição
+        const allocations = allocateCapital(pairsWithoutPosition, availableCapital, slotsAvailable);
+
+        logger.info('Alocação de capital', {
+          availableCapital: availableCapital.toFixed(2),
+          slotsAvailable,
+          candidatos: pairsWithoutPosition.length,
+          alocados: allocations.length,
+          alocacoes: allocations.map(a => `${a.symbol}: $${a.allocation.toFixed(2)} (score ${a.score})`)
+        });
 
         for (const alloc of allocations) {
           const pos = positions[alloc.symbol];
           if (pos.inPosition) continue;
 
           const pairConfig = PAIR_CONFIG[alloc.symbol];
-          const baseAllocation = Math.min(alloc.allocation, capitalPerPair);
-          const dynamicAllocation = strategy.getDynamicAllocation(baseAllocation, alloc.atrData?.atrPct);
 
-          if (dynamicAllocation < 10) continue;
+          // Sem cap artificial por par — allocateCapital já distribui correctamente
+          const dynamicAllocation = strategy.getDynamicAllocation(alloc.allocation, alloc.atrData?.atrPct);
+
+          if (dynamicAllocation < MIN_TRADE_AMOUNT) {
+            logger.info(`Alocação abaixo do mínimo para ${alloc.symbol}`, {
+              alocacao: dynamicAllocation.toFixed(2),
+              minimo: MIN_TRADE_AMOUNT
+            });
+            continue;
+          }
 
           const qty = risk.calculatePositionSize(dynamicAllocation, alloc.currentPrice, alloc.symbol);
           if (qty <= 0) continue;
@@ -662,6 +685,8 @@ BTC → 30min | RSI 40/60
 ETH → 1h | RSI 35/65
 BNB → 1h | RSI 40/60
 Score mínimo: ${MIN_SCORE_TO_BUY}/100
+Max posições: ${MAX_POSITIONS}
+Min trade: $${MIN_TRADE_AMOUNT}
 Cooldown após SL: 2 horas
 Indicadores: RSI + SMA + MACD + BB + ATR
 Confirmação: Tendência 4h + Padrões de velas
@@ -674,15 +699,15 @@ Posições em memória: ${PAIRS.filter(p => positions[p].inPosition).join(', ') 
 
   // Loop recursivo — garante que só corre um ciclo de cada vez
   async function loop() {
-  try {
-    await runCycle();
-  } catch(e) {
-    logger.error('Erro no loop', { message: e.message });
-  } finally {
-    setTimeout(loop, CYCLE_INTERVAL_MS);
+    try {
+      await runCycle();
+    } catch(e) {
+      logger.error('Erro no loop', { message: e.message });
+    } finally {
+      setTimeout(loop, CYCLE_INTERVAL_MS);
+    }
   }
-}
-loop();
+  loop();
 }
 
 module.exports = { start };
