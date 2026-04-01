@@ -1,11 +1,11 @@
 const logger = require('./logger');
 
-const PAIRS = ['BTCUSDT', 'ETHUSDT', 'BNBUSDT'];
+const PAIRS = ['BTCUSDC', 'ETHUSDC', 'BNBUSDC'];
 
 const PAIR_CONFIG = {
-  BTCUSDT: { interval: '30m', rsiBuy: 40, rsiSell: 60, stopLoss: 0.025, takeProfit: 0.05 },
-  ETHUSDT: { interval: '1h',  rsiBuy: 35, rsiSell: 65, stopLoss: 0.025, takeProfit: 0.05 },
-  BNBUSDT: { interval: '1h',  rsiBuy: 40, rsiSell: 60, stopLoss: 0.025, takeProfit: 0.05 },
+  BTCUSDC: { interval: '30m', rsiBuy: 40, rsiSell: 60, stopLoss: 0.025, takeProfit: 0.05 },
+  ETHUSDC: { interval: '1h',  rsiBuy: 35, rsiSell: 65, stopLoss: 0.025, takeProfit: 0.05 },
+  BNBUSDC: { interval: '1h',  rsiBuy: 40, rsiSell: 60, stopLoss: 0.025, takeProfit: 0.05 },
 };
 
 const MIN_SCORE_TO_BUY = 75;

@@ -70,7 +70,7 @@ async function getBalance() {
     headers: { 'X-MBX-APIKEY': API_KEY },
     params: { timestamp, recvWindow, signature }
   });
-  const usdt = res.data.balances.find(b => b.asset === 'USDT');
+  const usdt = res.data.balances.find(b => b.asset === 'USDC');
   return parseFloat(usdt?.free || 0);
 }
 
