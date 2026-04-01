@@ -674,10 +674,15 @@ Posições em memória: ${PAIRS.filter(p => positions[p].inPosition).join(', ') 
 
   // Loop recursivo — garante que só corre um ciclo de cada vez
   async function loop() {
+  try {
     await runCycle();
+  } catch(e) {
+    logger.error('Erro no loop', { message: e.message });
+  } finally {
     setTimeout(loop, CYCLE_INTERVAL_MS);
   }
-  loop();
+}
+loop();
 }
 
 module.exports = { start };
