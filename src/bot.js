@@ -652,6 +652,7 @@ async function runCycle() {
 
 async function start() {
   logger.info('Bot multi-par arrancado', { pairs: PAIRS });
+  try { const ipRes = await axios.get('https://api.ipify.org'); logger.info('Railway IP', { ip: ipRes.data }); } catch(e) {}
 
   await initDB();
   await restorePositions();
