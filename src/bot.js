@@ -14,7 +14,7 @@ const { getNewsSentiment } = require('./news');
 const { initDB, saveState, loadState } = require('./database');
 const { checkAndRunScan } = require('./scanner');
 
-const BASE_URL = 'https://testnet.binance.vision/api';
+const BASE_URL = 'https://api.binance.com/api';
 const API_KEY = process.env.BINANCE_API_KEY;
 const SECRET_KEY = process.env.BINANCE_SECRET_KEY;
 const COOLDOWN_MS = 2 * 60 * 60 * 1000;
