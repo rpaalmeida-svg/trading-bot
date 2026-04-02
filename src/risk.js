@@ -1,7 +1,5 @@
 const logger = require('./logger');
 
-const PAIRS_COUNT = 3;
-
 const RISK_CONFIG = {
   maxPositionSize: 0.95,
   stopLossPercent: 0.015,
@@ -14,20 +12,17 @@ const RISK_CONFIG = {
 let dailyStartBalance = null;
 
 function setDailyStartBalance(balance) {
-  const maxCapital = parseFloat(process.env.MAX_CAPITAL) || balance;
-  dailyStartBalance = Math.min(balance, maxCapital);
+  dailyStartBalance = balance;
   logger.info('Saldo inicial do dia definido', { balance: dailyStartBalance });
 }
 
 function checkDailyLoss(currentBalance) {
   if (!dailyStartBalance) return false;
-  const maxCapital = parseFloat(process.env.MAX_CAPITAL) || currentBalance;
-  const referenceBalance = Math.min(currentBalance, maxCapital);
-  const loss = (dailyStartBalance - referenceBalance) / dailyStartBalance;
+  const loss = (dailyStartBalance - currentBalance) / dailyStartBalance;
   if (loss >= RISK_CONFIG.maxDailyLoss) {
-    logger.warn('LIMITE DE PERDA DIÁRIA ATINGIDO — bot pausado', {
-      dailyStartBalance,
-      currentBalance,
+    logger.warn('LIMITE DE PERDA DIÁRIA ATINGIDO — novas compras pausadas', {
+      dailyStartBalance: dailyStartBalance.toFixed(2),
+      currentBalance: currentBalance.toFixed(2),
       lossPercent: (loss * 100).toFixed(2) + '%'
     });
     return true;
@@ -56,21 +51,66 @@ function updateTrailingStop(currentPrice, currentStopLoss) {
   return currentStopLoss;
 }
 
-function calculatePositionSize(balance, price, symbol = '') {
-  const maxCapital = parseFloat(process.env.MAX_CAPITAL) || balance;
-  const capitalPerPair = maxCapital / PAIRS_COUNT;
-  const available = Math.min(balance, capitalPerPair) * RISK_CONFIG.maxPositionSize;
+// ─────────────────────────────────────────────────────
+// POSITION SIZE — calcula quantidade a comprar
+// `allocatedCapital` já vem calculado do bot.js/portfolio.js
+// NÃO recalcular — usar directamente
+//
+// Lot sizes mínimos Binance (Spot):
+//   BTC:  0.00001 (stepSize 0.00001)
+//   ETH:  0.0001  (stepSize 0.0001)
+//   BNB:  0.01    (stepSize 0.01)
+//   SOL:  0.01    (stepSize 0.01)
+//   DOGE: 1       (stepSize 1)
+//   LINK: 0.01    (stepSize 0.01)
+//   AVAX: 0.01    (stepSize 0.01)
+//   DOT:  0.01    (stepSize 0.01)
+//   ADA:  0.1     (stepSize 0.1)
+//   MATIC:0.1     (stepSize 0.1)
+//   ATOM: 0.01    (stepSize 0.01)
+//   NEAR: 0.1     (stepSize 0.1)
+//   UNI:  0.01    (stepSize 0.01)
+//
+// Notional mínimo: $5 para a maioria dos pares USDC
+// ─────────────────────────────────────────────────────
+function calculatePositionSize(allocatedCapital, price, symbol = '') {
+  // Usar 95% do capital alocado (margem de segurança para fees)
+  const available = allocatedCapital * RISK_CONFIG.maxPositionSize;
   const quantity = available / price;
 
+  // Arredondar para o stepSize correcto de cada par
   let result;
-  if (symbol.includes('BTC')) result = Math.floor(quantity * 100000) / 100000;
-  else if (symbol.includes('ETH')) result = Math.floor(quantity * 10000) / 10000;
-  else if (symbol.includes('SOL')) result = Math.floor(quantity * 100) / 100;
-  else result = Math.floor(quantity * 1000) / 1000;
+  if (symbol.includes('BTC')) {
+    result = Math.floor(quantity * 100000) / 100000;  // stepSize 0.00001
+  } else if (symbol.includes('ETH')) {
+    result = Math.floor(quantity * 10000) / 10000;    // stepSize 0.0001
+  } else if (symbol.includes('DOGE')) {
+    result = Math.floor(quantity);                     // stepSize 1
+  } else if (symbol.includes('ADA') || symbol.includes('MATIC') || symbol.includes('NEAR')) {
+    result = Math.floor(quantity * 10) / 10;           // stepSize 0.1
+  } else {
+    // BNB, SOL, LINK, AVAX, DOT, ATOM, UNI e outros
+    result = Math.floor(quantity * 100) / 100;         // stepSize 0.01
+  }
 
-  if (symbol.includes('BTC') && result < 0.00001) return 0;
-  if (symbol.includes('ETH') && result < 0.0001) return 0;
-  if (symbol.includes('SOL') && result < 0.01) return 0;
+  // Verificar mínimos
+  const notionalValue = result * price;
+  if (notionalValue < 5) {
+    logger.warn(`Notional abaixo do mínimo para ${symbol}`, {
+      quantidade: result,
+      notional: notionalValue.toFixed(2),
+      minimo: 5
+    });
+    return 0;
+  }
+
+  // Log para debug
+  logger.info(`Position size calculado para ${symbol}`, {
+    capitalAlocado: allocatedCapital.toFixed(2),
+    precoActual: price.toFixed(2),
+    quantidade: result,
+    notional: notionalValue.toFixed(2)
+  });
 
   return result;
 }

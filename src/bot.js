@@ -75,8 +75,6 @@ async function getBalance() {
 
 // ─────────────────────────────────────────────────────
 // SALDO REAL = USDC livre + valor de mercado das posições abertas
-// Sem isto, o bot pensa que perdeu dinheiro quando na verdade
-// o capital está investido em crypto
 // ─────────────────────────────────────────────────────
 async function getRealBalance(usdcBalance) {
   let totalPositionValue = 0;
@@ -701,6 +699,68 @@ async function start() {
   await initDB();
   await restorePositions();
 
+  // ─────────────────────────────────────────────────────
+  // VALIDAÇÃO DE POSIÇÕES — compara BD com Binance real
+  // Se a BD diz "em posição" mas a Binance não tem o asset,
+  // limpa a posição fantasma
+  // ─────────────────────────────────────────────────────
+  try {
+    const timestamp = Date.now();
+    const recvWindow = 60000;
+    const query = `timestamp=${timestamp}&recvWindow=${recvWindow}`;
+    const signature = sign(query);
+    const res = await axios.get(`${BASE_URL}/v3/account`, {
+      headers: { 'X-MBX-APIKEY': API_KEY },
+      params: { timestamp, recvWindow, signature }
+    });
+    const balances = res.data.balances;
+
+    let positionsFixed = false;
+    for (const symbol of PAIRS) {
+      const pos = positions[symbol];
+      if (!pos.inPosition) continue;
+
+      const asset = symbol.replace('USDC', '');
+      const binanceBalance = balances.find(b => b.asset === asset);
+      const actualQuantity = binanceBalance ? parseFloat(binanceBalance.free) + parseFloat(binanceBalance.locked) : 0;
+
+      if (actualQuantity < (pos.quantity * 0.5)) {
+        logger.warn(`POSIÇÃO FANTASMA detectada: ${symbol}`, {
+          esperado: pos.quantity,
+          real: actualQuantity,
+          accao: 'a limpar'
+        });
+        pos.inPosition = false;
+        pos.entryPrice = null;
+        pos.stopLoss = null;
+        pos.takeProfit = null;
+        pos.quantity = null;
+        pos.highestPrice = null;
+        pos.lastStopLoss = null;
+        positionsFixed = true;
+
+        await telegram.sendMessage(telegram.formatAlert(
+          `⚠️ Posição fantasma detectada em ${symbol}\n` +
+          `BD dizia: em posição\n` +
+          `Binance real: ${actualQuantity} unidades\n` +
+          `Posição limpa automaticamente.`
+        ));
+      } else {
+        logger.info(`Posição validada: ${symbol}`, {
+          esperado: pos.quantity,
+          real: actualQuantity
+        });
+      }
+    }
+
+    if (positionsFixed) {
+      await persistPositions();
+      logger.info('Posições fantasma limpas e persistidas');
+    }
+  } catch (err) {
+    logger.warn('Erro na validação de posições — a continuar com BD', { message: err.message });
+  }
+
   const savedBalance = await loadState('initialBalance');
   let balance;
   try {
@@ -722,7 +782,6 @@ async function start() {
     await saveState('initialBalance', balance);
   }
 
-  // Usar saldo real para daily start (inclui posições)
   const realBal = await getRealBalance(balance);
   risk.setDailyStartBalance(realBal);
 
