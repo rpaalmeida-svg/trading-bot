@@ -21,6 +21,7 @@ const COOLDOWN_MS = 2 * 60 * 60 * 1000;
 const SEMESTRE_MS = 6 * 30 * 24 * 60 * 60 * 1000;
 const CYCLE_INTERVAL_MS = 30 * 60 * 1000;
 const CYCLE_LOCK_MS = 2 * 60 * 1000;
+const STARTUP_RETRY_MS = 60 * 1000; // Retry a cada 60s se Binance rejeitar
 
 let initialBalance = null;
 let dailyLossAlertSent = false;
@@ -73,9 +74,6 @@ async function getBalance() {
   return parseFloat(usdc?.free || 0);
 }
 
-// ─────────────────────────────────────────────────────
-// SALDO REAL = USDC livre + valor de mercado das posições abertas
-// ─────────────────────────────────────────────────────
 async function getRealBalance(usdcBalance) {
   let totalPositionValue = 0;
 
@@ -500,7 +498,7 @@ async function runCycle() {
       }
     }
 
-    // ─── PASSO 3: DAILY LOSS CHECK (usa saldo REAL, só bloqueia novas compras) ───
+    // ─── PASSO 3: DAILY LOSS CHECK ───
     const shouldStop = risk.checkDailyLoss(realBalance);
     if (shouldStop) {
       if (!dailyLossAlertSent) {
@@ -526,7 +524,7 @@ async function runCycle() {
       logger.warn('Macro bloqueou todas as compras', { score: news.sentimentScore });
     }
 
-    // ─── PASSO 4: NOVAS COMPRAS (só se daily loss não activo) ───
+    // ─── PASSO 4: NOVAS COMPRAS ───
     if (!shouldStop) {
       const openCount = PAIRS.filter(p => positions[p].inPosition).length;
       const maxCapital = parseFloat(process.env.MAX_CAPITAL) || realBalance;
@@ -692,88 +690,116 @@ async function runCycle() {
   }
 }
 
+// ─────────────────────────────────────────────────────
+// START — com retry em vez de crash
+// Se a Binance rejeitar (IP errado), espera 60s e tenta outra vez
+// Tu adicionas o IP na Binance com calma, o bot arranca sozinho
+// ─────────────────────────────────────────────────────
 async function start() {
   logger.info('Bot multi-par arrancado', { pairs: PAIRS });
-  try { const ipRes = await axios.get('https://api.ipify.org'); logger.info('Railway IP', { ip: ipRes.data }); } catch(e) {}
+
+  // Log do IP — SEMPRE funciona, não depende da Binance
+  try {
+    const ipRes = await axios.get('https://api.ipify.org');
+    const ip = ipRes.data;
+    logger.info('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+    logger.info(`🌐 RAILWAY IP: ${ip}`);
+    logger.info('Adiciona este IP na Binance API Management');
+    logger.info('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+  } catch(e) {
+    logger.warn('Não conseguiu obter IP público');
+  }
 
   await initDB();
   await restorePositions();
 
-  // ─────────────────────────────────────────────────────
-  // VALIDAÇÃO DE POSIÇÕES — compara BD com Binance real
-  // Se a BD diz "em posição" mas a Binance não tem o asset,
-  // limpa a posição fantasma
-  // ─────────────────────────────────────────────────────
-  try {
-    const timestamp = Date.now();
-    const recvWindow = 60000;
-    const query = `timestamp=${timestamp}&recvWindow=${recvWindow}`;
-    const signature = sign(query);
-    const res = await axios.get(`${BASE_URL}/v3/account`, {
-      headers: { 'X-MBX-APIKEY': API_KEY },
-      params: { timestamp, recvWindow, signature }
-    });
-    const balances = res.data.balances;
+  // ─── VALIDAÇÃO DE POSIÇÕES + SALDO — com retry infinito ───
+  let balance = null;
+  let attempts = 0;
 
-    let positionsFixed = false;
-    for (const symbol of PAIRS) {
-      const pos = positions[symbol];
-      if (!pos.inPosition) continue;
+  while (balance === null) {
+    attempts++;
+    try {
+      // Tentar validar posições contra Binance real
+      const timestamp = Date.now();
+      const recvWindow = 60000;
+      const query = `timestamp=${timestamp}&recvWindow=${recvWindow}`;
+      const signature = sign(query);
+      const res = await axios.get(`${BASE_URL}/v3/account`, {
+        headers: { 'X-MBX-APIKEY': API_KEY },
+        params: { timestamp, recvWindow, signature }
+      });
 
-      const asset = symbol.replace('USDC', '');
-      const binanceBalance = balances.find(b => b.asset === asset);
-      const actualQuantity = binanceBalance ? parseFloat(binanceBalance.free) + parseFloat(binanceBalance.locked) : 0;
+      // Se chegou aqui, a Binance aceitou!
+      const balances = res.data.balances;
+      const usdc = balances.find(b => b.asset === 'USDC');
+      balance = parseFloat(usdc?.free || 0);
 
-      if (actualQuantity < (pos.quantity * 0.5)) {
-        logger.warn(`POSIÇÃO FANTASMA detectada: ${symbol}`, {
-          esperado: pos.quantity,
-          real: actualQuantity,
-          accao: 'a limpar'
-        });
-        pos.inPosition = false;
-        pos.entryPrice = null;
-        pos.stopLoss = null;
-        pos.takeProfit = null;
-        pos.quantity = null;
-        pos.highestPrice = null;
-        pos.lastStopLoss = null;
-        positionsFixed = true;
+      logger.info('Saldo obtido com sucesso', { balance, tentativas: attempts });
 
-        await telegram.sendMessage(telegram.formatAlert(
-          `⚠️ Posição fantasma detectada em ${symbol}\n` +
-          `BD dizia: em posição\n` +
-          `Binance real: ${actualQuantity} unidades\n` +
-          `Posição limpa automaticamente.`
-        ));
+      // Validar posições fantasma
+      let positionsFixed = false;
+      for (const symbol of PAIRS) {
+        const pos = positions[symbol];
+        if (!pos.inPosition) continue;
+
+        const asset = symbol.replace('USDC', '');
+        const binanceBalance = balances.find(b => b.asset === asset);
+        const actualQuantity = binanceBalance ? parseFloat(binanceBalance.free) + parseFloat(binanceBalance.locked) : 0;
+
+        if (actualQuantity < (pos.quantity * 0.5)) {
+          logger.warn(`POSIÇÃO FANTASMA detectada: ${symbol}`, {
+            esperado: pos.quantity,
+            real: actualQuantity
+          });
+          pos.inPosition = false;
+          pos.entryPrice = null;
+          pos.stopLoss = null;
+          pos.takeProfit = null;
+          pos.quantity = null;
+          pos.highestPrice = null;
+          pos.lastStopLoss = null;
+          positionsFixed = true;
+
+          await telegram.sendMessage(telegram.formatAlert(
+            `⚠️ Posição fantasma detectada em ${symbol}\n` +
+            `BD dizia: em posição\n` +
+            `Binance real: ${actualQuantity} unidades\n` +
+            `Posição limpa automaticamente.`
+          ));
+        } else {
+          logger.info(`Posição validada: ${symbol}`, {
+            esperado: pos.quantity,
+            real: actualQuantity
+          });
+        }
+      }
+
+      if (positionsFixed) {
+        await persistPositions();
+        logger.info('Posições fantasma limpas e persistidas');
+      }
+
+    } catch (err) {
+      const isAuthError = err.response?.data?.code === -2015;
+      if (isAuthError) {
+        logger.warn(`⏳ Binance rejeitou (IP não autorizado) — tentativa ${attempts}. A esperar 60s para retry...`);
+        logger.warn('Adiciona o IP mostrado acima na Binance API Management');
       } else {
-        logger.info(`Posição validada: ${symbol}`, {
-          esperado: pos.quantity,
-          real: actualQuantity
+        logger.error(`Erro ao conectar à Binance — tentativa ${attempts}`, {
+          message: err.message,
+          detail: err.response?.data
         });
       }
-    }
 
-    if (positionsFixed) {
-      await persistPositions();
-      logger.info('Posições fantasma limpas e persistidas');
+      // Esperar 60 segundos e tentar outra vez — NÃO crashar
+      await new Promise(resolve => setTimeout(resolve, STARTUP_RETRY_MS));
     }
-  } catch (err) {
-    logger.warn('Erro na validação de posições — a continuar com BD', { message: err.message });
   }
+
+  // ─── A partir daqui, Binance está a funcionar ───
 
   const savedBalance = await loadState('initialBalance');
-  let balance;
-  try {
-    balance = await getBalance();
-    logger.info('Saldo obtido com sucesso', { balance });
-  } catch (err) {
-    logger.error('Erro ao obter saldo inicial', {
-      message: err.message,
-      detail: err.response?.data
-    });
-    throw err;
-  }
-
   if (savedBalance) {
     initialBalance = savedBalance;
     logger.info('Saldo inicial recuperado', { initialBalance });
