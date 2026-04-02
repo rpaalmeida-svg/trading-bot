@@ -23,8 +23,8 @@ const CYCLE_INTERVAL_MS = 30 * 60 * 1000;
 const CYCLE_LOCK_MS = 2 * 60 * 1000;
 
 let initialBalance = null;
+let dailyLossAlertSent = false;
 
-// Cache de últimos preços conhecidos — evita $0 no dashboard quando a API falha
 const lastKnownPrices = {};
 
 const positions = {};
@@ -71,6 +71,49 @@ async function getBalance() {
   });
   const usdc = res.data.balances.find(b => b.asset === 'USDC');
   return parseFloat(usdc?.free || 0);
+}
+
+// ─────────────────────────────────────────────────────
+// SALDO REAL = USDC livre + valor de mercado das posições abertas
+// Sem isto, o bot pensa que perdeu dinheiro quando na verdade
+// o capital está investido em crypto
+// ─────────────────────────────────────────────────────
+async function getRealBalance(usdcBalance) {
+  let totalPositionValue = 0;
+
+  for (const symbol of PAIRS) {
+    const pos = positions[symbol];
+    if (!pos.inPosition || !pos.quantity) continue;
+
+    try {
+      const currentPrice = await getPrice(symbol);
+      const positionValue = pos.quantity * currentPrice;
+      totalPositionValue += positionValue;
+      logger.info(`Valor posição ${symbol}`, {
+        quantidade: pos.quantity,
+        precoActual: currentPrice.toFixed(2),
+        valor: positionValue.toFixed(2)
+      });
+    } catch (err) {
+      if (pos.entryPrice && pos.quantity) {
+        const fallbackValue = pos.quantity * pos.entryPrice;
+        totalPositionValue += fallbackValue;
+        logger.warn(`Fallback valor posição ${symbol}`, {
+          precoEntrada: pos.entryPrice,
+          valor: fallbackValue.toFixed(2)
+        });
+      }
+    }
+  }
+
+  const realBalance = usdcBalance + totalPositionValue;
+  logger.info('Saldo real calculado', {
+    usdc: usdcBalance.toFixed(2),
+    posicoes: totalPositionValue.toFixed(2),
+    total: realBalance.toFixed(2)
+  });
+
+  return realBalance;
 }
 
 async function getPrice(symbol) {
@@ -201,20 +244,19 @@ async function analyzePair(symbol, sentiment, macroData) {
   }
 }
 
-function sendDashboardUpdate(balance, validAnalyses, sentiment, news, stats) {
+function sendDashboardUpdate(balance, realBalance, validAnalyses, sentiment, news, stats) {
   try {
-    const balanceChange = initialBalance ? (balance - initialBalance).toFixed(2) : 0;
-    const balanceChangePct = initialBalance ? (((balance - initialBalance) / initialBalance) * 100).toFixed(2) : 0;
+    const displayBalance = realBalance || balance;
+    const balanceChange = initialBalance ? (displayBalance - initialBalance).toFixed(2) : 0;
+    const balanceChangePct = initialBalance ? (((displayBalance - initialBalance) / initialBalance) * 100).toFixed(2) : 0;
 
-    // FIX: era BTCUSDT — corrigido para BTCUSDC
     const btcData = validAnalyses.find(a => a.symbol === 'BTCUSDC');
 
     updateDashboard({
-      balance: balance.toFixed(2),
-      initialBalance: initialBalance ? initialBalance.toFixed(2) : balance.toFixed(2),
+      balance: displayBalance.toFixed(2),
+      initialBalance: initialBalance ? initialBalance.toFixed(2) : displayBalance.toFixed(2),
       balanceChange,
       balanceChangePct,
-      // FIX: era BTCUSDT — corrigido para BTCUSDC
       price: btcData ? btcData.currentPrice.toFixed(2) : (lastKnownPrices['BTCUSDC'] ? lastKnownPrices['BTCUSDC'].toFixed(2) : '0'),
       rsi: btcData && btcData.rsi ? btcData.rsi.toFixed(2) : 'N/A',
       smaFast: btcData && btcData.smaFast ? btcData.smaFast.toFixed(2) : 'N/A',
@@ -325,7 +367,7 @@ async function checkSemestralWithdrawal(balance) {
 }
 
 async function runCycle() {
-  // Lock na BD: bloqueia outros processos (ex: durante deploy Railway)
+  // Lock na BD
   try {
     const lastCycleStart = await loadState('lastCycleStart');
     const now = Date.now();
@@ -341,6 +383,7 @@ async function runCycle() {
   }
 
   let balance = 0;
+  let realBalance = 0;
   let sentiment = { value: 50, classification: 'Neutral', signal: 'NEUTRAL' };
   let news = { signal: 'NEUTRAL', sentimentScore: 0, recentTitles: [], blockBuying: false, raw: {} };
   let validAnalyses = [];
@@ -349,43 +392,25 @@ async function runCycle() {
     balance = await getBalance();
     sentiment = await getFearGreedIndex();
     news = await getNewsSentiment();
+    realBalance = await getRealBalance(balance);
 
     logger.info(`Ciclo iniciado`, {
-      balance: balance.toFixed(2),
+      usdcBalance: balance.toFixed(2),
+      realBalance: realBalance.toFixed(2),
       fearGreed: sentiment.value,
       newsSignal: news.signal,
       macroScore: news.sentimentScore,
       blockBuying: news.blockBuying
     });
 
-    await checkSemestralWithdrawal(balance);
+    await checkSemestralWithdrawal(realBalance);
     await checkAndRunScan();
 
-    const shouldStop = risk.checkDailyLoss(balance);
-    if (shouldStop) {
-      await telegram.sendMessage(telegram.formatAlert('🛑 Limite de perda diária atingido — bot pausado!'));
-      const statsStop = await getStats();
-      sendDashboardUpdate(balance, [], sentiment, news, statsStop);
-      return;
-    }
-
-    if (news.blockBuying) {
-      logger.warn('Macro bloqueou todas as compras', { score: news.sentimentScore });
-      await telegram.sendMessage(telegram.formatAlert(
-        `🌍 Macro Overlay activado — compras bloqueadas!\n` +
-        `Score macro: ${news.sentimentScore}\n` +
-        `Razão: ${news.recentTitles[0] || 'Mercado em colapso'}\n` +
-        `Bot a aguardar estabilização.`
-      ));
-    }
-
+    // ─── PASSO 1: ANÁLISE DE MERCADO ───
     const analyses = await Promise.all(PAIRS.map(symbol => analyzePair(symbol, sentiment, news)));
     validAnalyses = analyses.filter(a => a !== null);
 
-    const statsFirst = await getStats();
-    sendDashboardUpdate(balance, validAnalyses, sentiment, news, statsFirst);
-
-    // Gerir posições abertas
+    // ─── PASSO 2: GERIR POSIÇÕES ABERTAS (SEMPRE — mesmo com daily loss) ───
     for (const data of validAnalyses) {
       const pos = positions[data.symbol];
       if (!pos.inPosition) continue;
@@ -407,7 +432,7 @@ async function runCycle() {
         await persistPositions();
       }
 
-      // Trailing Take-Profit — activa após +3%, vende se recua 4% do máximo
+      // Trailing Take-Profit
       const gainFromEntry = pos.entryPrice ? (pos.highestPrice - pos.entryPrice) / pos.entryPrice : 0;
       const trailingTPActive = gainFromEntry >= 0.03;
       const trailingTPStop = pos.highestPrice * 0.96;
@@ -447,7 +472,7 @@ async function runCycle() {
         continue;
       }
 
-      // Take-Profit fixo (backup)
+      // Take-Profit fixo
       if (currentPrice >= pos.takeProfit) {
         try {
           await placeOrder(symbol, 'SELL', pos.quantity);
@@ -477,152 +502,171 @@ async function runCycle() {
       }
     }
 
-    // ─────────────────────────────────────────────────────
-    // NOVAS COMPRAS — lógica reescrita para contas pequenas
-    // ─────────────────────────────────────────────────────
-    const openCount = PAIRS.filter(p => positions[p].inPosition).length;
-    const maxCapital = parseFloat(process.env.MAX_CAPITAL) || balance;
-    const slotsAvailable = MAX_POSITIONS - openCount;
-    const now = Date.now();
-
-    // Capital disponível = min(saldo, MAX_CAPITAL) — NÃO dividir por total de pares
-    const availableCapital = Math.min(balance, maxCapital);
-
-    if (availableCapital < MIN_TRADE_AMOUNT) {
-      logger.warn('Capital insuficiente para qualquer trade', { availableCapital: availableCapital.toFixed(2), minimo: MIN_TRADE_AMOUNT });
-    } else if (slotsAvailable > 0 && balance > MIN_TRADE_AMOUNT && !news.blockBuying) {
-      if (news.signal === 'NEGATIVE') {
-        logger.warn('Macro negativo — compras pausadas', { score: news.sentimentScore });
+    // ─── PASSO 3: DAILY LOSS CHECK (usa saldo REAL, só bloqueia novas compras) ───
+    const shouldStop = risk.checkDailyLoss(realBalance);
+    if (shouldStop) {
+      if (!dailyLossAlertSent) {
         await telegram.sendMessage(telegram.formatAlert(
-          `🌍 Macro negativo — compras pausadas\nScore: ${news.sentimentScore}\n${news.recentTitles[0] || ''}`
+          `🛑 Limite de perda diária atingido — novas compras pausadas!\n` +
+          `Saldo real: $${realBalance.toFixed(2)} (USDC: $${balance.toFixed(2)} + posições)\n` +
+          `Posições abertas continuam a ser monitorizadas.`
         ));
-      } else {
-        const pairsWithoutPosition = validAnalyses.filter(a => {
-          if (positions[a.symbol].inPosition) return false;
+        dailyLossAlertSent = true;
+      }
+      logger.warn('Daily loss limit — novas compras bloqueadas', {
+        realBalance: realBalance.toFixed(2),
+        usdcBalance: balance.toFixed(2)
+      });
+    } else {
+      dailyLossAlertSent = false;
+    }
 
-          if (positions[a.symbol].lastStopLoss) {
-            const elapsed = now - positions[a.symbol].lastStopLoss;
-            if (elapsed < COOLDOWN_MS) {
-              const minutosRestantes = Math.round((COOLDOWN_MS - elapsed) / 60000);
-              logger.info(`Cooldown activo para ${a.symbol}`, { minutosRestantes });
+    const statsFirst = await getStats();
+    sendDashboardUpdate(balance, realBalance, validAnalyses, sentiment, news, statsFirst);
+
+    if (news.blockBuying) {
+      logger.warn('Macro bloqueou todas as compras', { score: news.sentimentScore });
+    }
+
+    // ─── PASSO 4: NOVAS COMPRAS (só se daily loss não activo) ───
+    if (!shouldStop) {
+      const openCount = PAIRS.filter(p => positions[p].inPosition).length;
+      const maxCapital = parseFloat(process.env.MAX_CAPITAL) || realBalance;
+      const slotsAvailable = MAX_POSITIONS - openCount;
+      const now = Date.now();
+
+      const availableCapital = Math.min(balance, maxCapital);
+
+      if (availableCapital < MIN_TRADE_AMOUNT) {
+        logger.warn('Capital insuficiente para qualquer trade', { availableCapital: availableCapital.toFixed(2), minimo: MIN_TRADE_AMOUNT });
+      } else if (slotsAvailable > 0 && balance > MIN_TRADE_AMOUNT && !news.blockBuying) {
+        if (news.signal === 'NEGATIVE') {
+          logger.warn('Macro negativo — compras pausadas', { score: news.sentimentScore });
+        } else {
+          const pairsWithoutPosition = validAnalyses.filter(a => {
+            if (positions[a.symbol].inPosition) return false;
+
+            if (positions[a.symbol].lastStopLoss) {
+              const elapsed = now - positions[a.symbol].lastStopLoss;
+              if (elapsed < COOLDOWN_MS) {
+                const minutosRestantes = Math.round((COOLDOWN_MS - elapsed) / 60000);
+                logger.info(`Cooldown activo para ${a.symbol}`, { minutosRestantes });
+                return false;
+              }
+            }
+
+            if (a.score < MIN_SCORE_TO_BUY) {
+              logger.info(`Score insuficiente para ${a.symbol}`, {
+                compositeScore: a.score,
+                technicalScore: a.technicalScore,
+                macroScore: a.macroScore,
+                minimo: MIN_SCORE_TO_BUY
+              });
               return false;
             }
-          }
 
-          if (a.score < MIN_SCORE_TO_BUY) {
-            logger.info(`Score insuficiente para ${a.symbol}`, {
-              compositeScore: a.score,
-              technicalScore: a.technicalScore,
-              macroScore: a.macroScore,
-              minimo: MIN_SCORE_TO_BUY
-            });
-            return false;
-          }
+            if (a.trend4h === 'BEARISH') {
+              logger.info(`Tendência 4h BEARISH — bloqueado para ${a.symbol}`);
+              return false;
+            }
 
-          if (a.trend4h === 'BEARISH') {
-            logger.info(`Tendência 4h BEARISH — bloqueado para ${a.symbol}`);
-            return false;
-          }
+            if (a.atrData && a.atrData.atrPct > 4.0) {
+              logger.info(`Volatilidade extrema — bloqueado para ${a.symbol}`, { atrPct: a.atrData.atrPct.toFixed(2) });
+              return false;
+            }
 
-          if (a.atrData && a.atrData.atrPct > 4.0) {
-            logger.info(`Volatilidade extrema — bloqueado para ${a.symbol}`, { atrPct: a.atrData.atrPct.toFixed(2) });
-            return false;
-          }
+            return true;
+          });
 
-          return true;
-        });
+          const allocations = allocateCapital(pairsWithoutPosition, availableCapital, slotsAvailable);
 
-        // Passar capital disponível e slots — allocateCapital decide a distribuição
-        const allocations = allocateCapital(pairsWithoutPosition, availableCapital, slotsAvailable);
+          logger.info('Alocação de capital', {
+            availableCapital: availableCapital.toFixed(2),
+            slotsAvailable,
+            candidatos: pairsWithoutPosition.length,
+            alocados: allocations.length,
+            alocacoes: allocations.map(a => `${a.symbol}: $${a.allocation.toFixed(2)} (score ${a.score})`)
+          });
 
-        logger.info('Alocação de capital', {
-          availableCapital: availableCapital.toFixed(2),
-          slotsAvailable,
-          candidatos: pairsWithoutPosition.length,
-          alocados: allocations.length,
-          alocacoes: allocations.map(a => `${a.symbol}: $${a.allocation.toFixed(2)} (score ${a.score})`)
-        });
+          for (const alloc of allocations) {
+            const pos = positions[alloc.symbol];
+            if (pos.inPosition) continue;
 
-        for (const alloc of allocations) {
-          const pos = positions[alloc.symbol];
-          if (pos.inPosition) continue;
+            const pairConfig = PAIR_CONFIG[alloc.symbol];
+            const dynamicAllocation = strategy.getDynamicAllocation(alloc.allocation, alloc.atrData?.atrPct);
 
-          const pairConfig = PAIR_CONFIG[alloc.symbol];
+            if (dynamicAllocation < MIN_TRADE_AMOUNT) {
+              logger.info(`Alocação abaixo do mínimo para ${alloc.symbol}`, {
+                alocacao: dynamicAllocation.toFixed(2),
+                minimo: MIN_TRADE_AMOUNT
+              });
+              continue;
+            }
 
-          // Sem cap artificial por par — allocateCapital já distribui correctamente
-          const dynamicAllocation = strategy.getDynamicAllocation(alloc.allocation, alloc.atrData?.atrPct);
+            const qty = risk.calculatePositionSize(dynamicAllocation, alloc.currentPrice, alloc.symbol);
+            if (qty <= 0) continue;
 
-          if (dynamicAllocation < MIN_TRADE_AMOUNT) {
-            logger.info(`Alocação abaixo do mínimo para ${alloc.symbol}`, {
-              alocacao: dynamicAllocation.toFixed(2),
-              minimo: MIN_TRADE_AMOUNT
-            });
-            continue;
-          }
+            const adaptiveStop = strategy.getAdaptiveStopLoss(alloc.currentPrice, alloc.atrData?.atr, 2.0);
+            const takeProfit = alloc.currentPrice * (1 + pairConfig.takeProfit);
 
-          const qty = risk.calculatePositionSize(dynamicAllocation, alloc.currentPrice, alloc.symbol);
-          if (qty <= 0) continue;
+            try {
+              await placeOrder(alloc.symbol, 'BUY', qty);
+              pos.inPosition = true;
+              pos.entryPrice = alloc.currentPrice;
+              pos.stopLoss = adaptiveStop;
+              pos.takeProfit = takeProfit;
+              pos.quantity = qty;
+              pos.lastStopLoss = null;
+              pos.highestPrice = alloc.currentPrice;
+              await persistPositions();
 
-          const adaptiveStop = strategy.getAdaptiveStopLoss(alloc.currentPrice, alloc.atrData?.atr, 2.0);
-          const takeProfit = alloc.currentPrice * (1 + pairConfig.takeProfit);
+              await recordBuy(alloc.symbol, alloc.currentPrice, qty, pos.stopLoss, pos.takeProfit);
 
-          try {
-            await placeOrder(alloc.symbol, 'BUY', qty);
-            pos.inPosition = true;
-            pos.entryPrice = alloc.currentPrice;
-            pos.stopLoss = adaptiveStop;
-            pos.takeProfit = takeProfit;
-            pos.quantity = qty;
-            pos.lastStopLoss = null;
-            pos.highestPrice = alloc.currentPrice;
-            await persistPositions();
+              const reason = getReason(alloc.score, alloc.rsi, sentiment.value, news);
+              const atrPctStr = alloc.atrData ? alloc.atrData.atrPct.toFixed(2) + '%' : 'N/A';
+              const allocPct = alloc.atrData ? Math.round(strategy.getDynamicAllocation(100, alloc.atrData.atrPct)) + '%' : '100%';
 
-            await recordBuy(alloc.symbol, alloc.currentPrice, qty, pos.stopLoss, pos.takeProfit);
-
-            const reason = getReason(alloc.score, alloc.rsi, sentiment.value, news);
-            const atrPctStr = alloc.atrData ? alloc.atrData.atrPct.toFixed(2) + '%' : 'N/A';
-            const allocPct = alloc.atrData ? Math.round(strategy.getDynamicAllocation(100, alloc.atrData.atrPct)) + '%' : '100%';
-
-            await telegram.sendMessage(telegram.formatTrade('BUY', {
-              symbol: alloc.symbol,
-              price: alloc.currentPrice.toFixed(2),
-              quantity: qty,
-              stopLoss: pos.stopLoss.toFixed(2),
-              takeProfit: pos.takeProfit.toFixed(2)
-            }));
-            await telegram.sendMessage(telegram.formatAlert(
-              `🟢 Compra ${alloc.symbol}\n` +
-              `Score: ${alloc.score}/100 (T:${alloc.technicalScore} M:${alloc.macroScore})\n` +
-              `Tendência 4h: ${alloc.trend4h}\n` +
-              `MACD: ${alloc.macd ? (alloc.macd.histogram > 0 ? '📈 Positivo' : '📉 Negativo') : 'N/A'}\n` +
-              `BB %B: ${alloc.bb ? alloc.bb.percentB.toFixed(3) : 'N/A'}\n` +
-              `ATR: ${atrPctStr} (alocação: ${allocPct})\n` +
-              `Padrão: ${alloc.candlePattern}\n` +
-              `Macro: ${news.signal} (${news.sentimentScore})\n` +
-              `Razão: ${reason}\n` +
-              `Capital: $${dynamicAllocation.toFixed(2)}`
-            ));
-          } catch (e) {
-            logger.error(`Erro ao comprar ${alloc.symbol}`, { message: e.message });
+              await telegram.sendMessage(telegram.formatTrade('BUY', {
+                symbol: alloc.symbol,
+                price: alloc.currentPrice.toFixed(2),
+                quantity: qty,
+                stopLoss: pos.stopLoss.toFixed(2),
+                takeProfit: pos.takeProfit.toFixed(2)
+              }));
+              await telegram.sendMessage(telegram.formatAlert(
+                `🟢 Compra ${alloc.symbol}\n` +
+                `Score: ${alloc.score}/100 (T:${alloc.technicalScore} M:${alloc.macroScore})\n` +
+                `Tendência 4h: ${alloc.trend4h}\n` +
+                `MACD: ${alloc.macd ? (alloc.macd.histogram > 0 ? '📈 Positivo' : '📉 Negativo') : 'N/A'}\n` +
+                `BB %B: ${alloc.bb ? alloc.bb.percentB.toFixed(3) : 'N/A'}\n` +
+                `ATR: ${atrPctStr} (alocação: ${allocPct})\n` +
+                `Padrão: ${alloc.candlePattern}\n` +
+                `Macro: ${news.signal} (${news.sentimentScore})\n` +
+                `Razão: ${reason}\n` +
+                `Capital: $${dynamicAllocation.toFixed(2)}`
+              ));
+            } catch (e) {
+              logger.error(`Erro ao comprar ${alloc.symbol}`, { message: e.message });
+            }
           }
         }
       }
     }
 
     const stats = await getStats();
-    sendDashboardUpdate(balance, validAnalyses, sentiment, news, stats);
+    sendDashboardUpdate(balance, realBalance, validAnalyses, sentiment, news, stats);
 
-    const balanceChange = initialBalance ? (balance - initialBalance).toFixed(2) : 0;
-    const balanceChangePct = initialBalance ? (((balance - initialBalance) / initialBalance) * 100).toFixed(2) : 0;
+    const balanceChange = initialBalance ? (realBalance - initialBalance).toFixed(2) : 0;
+    const balanceChangePct = initialBalance ? (((realBalance - initialBalance) / initialBalance) * 100).toFixed(2) : 0;
 
     await telegram.sendMessage(telegram.formatStatus({
-      balance: balance.toFixed(2),
+      balance: realBalance.toFixed(2),
       balanceChange,
       balanceChangePct,
       fearGreed: sentiment.value,
       fearGreedLabel: sentiment.classification,
       fearGreedEmoji: getEmoji(sentiment.value),
-      inPosition: openCount > 0,
+      inPosition: PAIRS.filter(p => positions[p].inPosition).length > 0,
       totalProfit: stats.totalProfit,
       winRate: stats.winRate,
       totalTrades: stats.totalTrades,
@@ -645,7 +689,7 @@ async function runCycle() {
     await telegram.sendMessage(telegram.formatAlert(`Erro no bot: ${err.message}`));
     if (balance > 0) {
       const statsErr = await getStats();
-      sendDashboardUpdate(balance, validAnalyses, sentiment, news, statsErr);
+      sendDashboardUpdate(balance, realBalance, validAnalyses, sentiment, news, statsErr);
     }
   }
 }
@@ -678,7 +722,9 @@ async function start() {
     await saveState('initialBalance', balance);
   }
 
-  risk.setDailyStartBalance(balance);
+  // Usar saldo real para daily start (inclui posições)
+  const realBal = await getRealBalance(balance);
+  risk.setDailyStartBalance(realBal);
 
   await telegram.sendMessage(`🚀 <b>Trading Bot arrancou!</b>
 Pares: ${PAIRS.join(', ')}
@@ -698,7 +744,6 @@ Macro Overlay: Fear&Greed + Market Cap + BTC7d + ATH + ETF Flows
 Alerta semestral: 50% lucros activo
 Posições em memória: ${PAIRS.filter(p => positions[p].inPosition).join(', ') || 'nenhuma'}`);
 
-  // Loop recursivo — garante que só corre um ciclo de cada vez
   async function loop() {
     try {
       await runCycle();
