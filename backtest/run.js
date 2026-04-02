@@ -51,7 +51,7 @@ function calculateSMA(prices, period) {
   return slice.reduce((a, b) => a + b, 0) / period;
 }
 
-async function getHistoricalData(symbol, interval, months = 6) {
+async function getHistoricalData(symbol, interval, months = 60) {
   const endTime = Date.now();
   const startTime = endTime - (months * 30 * 24 * 60 * 60 * 1000);
   let allCandles = [];

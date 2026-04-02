@@ -14,14 +14,45 @@ const { getNewsSentiment } = require('./news');
 const { initDB, saveState, loadState } = require('./database');
 const { checkAndRunScan } = require('./scanner');
 
-const BASE_URL = 'https://api.binance.com/api';
-const API_KEY = process.env.BINANCE_API_KEY;
-const SECRET_KEY = process.env.BINANCE_SECRET_KEY;
+// ─────────────────────────────────────────────────────
+// PROXY — IP Fixo via QuotaGuard (resolve problema de IP do Railway)
+// Configura QUOTAGUARD_URL no Railway Variables para activar
+// ─────────────────────────────────────────────────────
+const PROXY_URL = process.env.QUOTAGUARD_URL || null;
+let binanceHttp;
+
+if (PROXY_URL) {
+  const { HttpsProxyAgent } = require('https-proxy-agent');
+  const proxyAgent = new HttpsProxyAgent(PROXY_URL);
+  binanceHttp = axios.create({
+    baseURL: 'https://api.binance.com/api',
+    headers: { 'X-MBX-APIKEY': process.env.BINANCE_API_KEY },
+    httpsAgent: proxyAgent,
+    proxy: false // Desliga proxy nativo do axios — usamos o agent
+  });
+} else {
+  binanceHttp = axios.create({
+    baseURL: 'https://api.binance.com/api',
+    headers: { 'X-MBX-APIKEY': process.env.BINANCE_API_KEY }
+  });
+}
+
+// ─────────────────────────────────────────────────────
+// ASSINATURA — Ed25519 (sem restrição de IP) com fallback HMAC
+// ─────────────────────────────────────────────────────
+const ED25519_KEY_RAW = process.env.ED25519_PRIVATE_KEY || '';
+// Railway pode guardar newlines como \n literal — converter para newlines reais
+const ED25519_KEY_PEM = ED25519_KEY_RAW.includes('BEGIN')
+  ? ED25519_KEY_RAW.replace(/\\n/g, '\n')
+  : null;
+const SECRET_KEY = process.env.BINANCE_SECRET_KEY || null; // Fallback HMAC (legacy)
+
 const COOLDOWN_MS = 2 * 60 * 60 * 1000;
 const SEMESTRE_MS = 6 * 30 * 24 * 60 * 60 * 1000;
 const CYCLE_INTERVAL_MS = 30 * 60 * 1000;
 const CYCLE_LOCK_MS = 2 * 60 * 1000;
-const STARTUP_RETRY_MS = 60 * 1000; // Retry a cada 60s se Binance rejeitar
+const STARTUP_RETRY_MS = 60 * 1000;
+const MIN_ORPHAN_VALUE_USD = 2; // Valor mínimo para considerar posição órfã
 
 let initialBalance = null;
 let dailyLossAlertSent = false;
@@ -58,19 +89,34 @@ async function restorePositions() {
 }
 
 function sign(queryString) {
+  if (ED25519_KEY_PEM) {
+    // Ed25519 — assinatura assimétrica (sem restrição de IP)
+    const privateKey = crypto.createPrivateKey(ED25519_KEY_PEM);
+    const signature = crypto.sign(null, Buffer.from(queryString), privateKey);
+    return signature.toString('base64');
+  }
+  // Fallback HMAC — legacy (requer IP restrito)
   return crypto.createHmac('sha256', SECRET_KEY).update(queryString).digest('hex');
 }
 
-async function getBalance() {
+// ─────────────────────────────────────────────────────
+// BINANCE API — todas as chamadas via binanceHttp (com proxy se configurado)
+// ─────────────────────────────────────────────────────
+
+async function getAccountData() {
   const timestamp = Date.now();
   const recvWindow = 60000;
   const query = `timestamp=${timestamp}&recvWindow=${recvWindow}`;
   const signature = sign(query);
-  const res = await axios.get(`${BASE_URL}/v3/account`, {
-    headers: { 'X-MBX-APIKEY': API_KEY },
+  const res = await binanceHttp.get('/v3/account', {
     params: { timestamp, recvWindow, signature }
   });
-  const usdc = res.data.balances.find(b => b.asset === 'USDC');
+  return res.data;
+}
+
+async function getBalance() {
+  const data = await getAccountData();
+  const usdc = data.balances.find(b => b.asset === 'USDC');
   return parseFloat(usdc?.free || 0);
 }
 
@@ -113,12 +159,12 @@ async function getRealBalance(usdcBalance) {
 }
 
 async function getPrice(symbol) {
-  const res = await axios.get(`${BASE_URL}/v3/ticker/price`, { params: { symbol } });
+  const res = await binanceHttp.get('/v3/ticker/price', { params: { symbol } });
   return parseFloat(res.data.price);
 }
 
 async function getCandles(symbol, interval, limit = 100) {
-  const res = await axios.get(`${BASE_URL}/v3/klines`, {
+  const res = await binanceHttp.get('/v3/klines', {
     params: { symbol, interval, limit }
   });
   return res.data.map(k => ({
@@ -132,7 +178,7 @@ async function getCandles(symbol, interval, limit = 100) {
 
 async function getPriceHistory4h(symbol) {
   try {
-    const res = await axios.get(`${BASE_URL}/v3/klines`, {
+    const res = await binanceHttp.get('/v3/klines', {
       params: { symbol, interval: '4h', limit: 100 }
     });
     return res.data.map(k => parseFloat(k[4]));
@@ -143,7 +189,7 @@ async function getPriceHistory4h(symbol) {
 }
 
 async function getVolume(symbol) {
-  const res = await axios.get(`${BASE_URL}/v3/ticker/24hr`, { params: { symbol } });
+  const res = await binanceHttp.get('/v3/ticker/24hr', { params: { symbol } });
   return parseFloat(res.data.quoteVolume);
 }
 
@@ -153,8 +199,7 @@ async function placeOrder(symbol, side, quantity) {
     const params = { symbol, side, type: 'MARKET', quantity, timestamp };
     const query = new URLSearchParams(params).toString();
     const signature = sign(query);
-    const res = await axios.post(`${BASE_URL}/v3/order`, null, {
-      headers: { 'X-MBX-APIKEY': API_KEY },
+    const res = await binanceHttp.post('/v3/order', null, {
       params: { ...params, signature }
     });
     logger.trade(`Ordem executada: ${side} ${symbol}`, { symbol, quantity, orderId: res.data.orderId });
@@ -407,6 +452,7 @@ async function runCycle() {
     validAnalyses = analyses.filter(a => a !== null);
 
     // ─── PASSO 2: GERIR POSIÇÕES ABERTAS (SEMPRE — mesmo com daily loss) ───
+    // ─── FIX: Posição SÓ é limpa se a venda for CONFIRMADA pela Binance ───
     for (const data of validAnalyses) {
       const pos = positions[data.symbol];
       if (!pos.inPosition) continue;
@@ -436,6 +482,7 @@ async function runCycle() {
       if (trailingTPActive && currentPrice <= trailingTPStop) {
         try {
           await placeOrder(symbol, 'SELL', pos.quantity);
+          // ✅ Venda confirmada — agora sim, limpar posição
           const trade = await recordSell(symbol, currentPrice, 'TRAILING_TP');
           const profit = trade ? trade.profit : 0;
           const maxGainPct = (gainFromEntry * 100).toFixed(2);
@@ -446,10 +493,15 @@ async function runCycle() {
             `Vendido a: $${currentPrice.toFixed(2)}\n` +
             `Resultado: +$${profit.toFixed(2)}`
           ));
-        } catch (e) { logger.error(`Erro trailing TP ${symbol}`, { message: e.message }); }
-        pos.inPosition = false; pos.entryPrice = null; pos.quantity = null;
-        pos.highestPrice = null; pos.lastStopLoss = null;
-        await persistPositions();
+          pos.inPosition = false; pos.entryPrice = null; pos.quantity = null;
+          pos.highestPrice = null; pos.lastStopLoss = null;
+          await persistPositions();
+        } catch (e) {
+          logger.error(`Erro trailing TP ${symbol} — POSIÇÃO MANTIDA`, { message: e.message });
+          await telegram.sendMessage(telegram.formatAlert(
+            `⚠️ VENDA FALHOU: ${symbol} (Trailing TP)\nErro: ${e.message}\nPosição mantida — retry no próximo ciclo.`
+          ));
+        }
         continue;
       }
 
@@ -457,14 +509,20 @@ async function runCycle() {
       if (currentPrice <= pos.stopLoss) {
         try {
           await placeOrder(symbol, 'SELL', pos.quantity);
+          // ✅ Venda confirmada — agora sim, limpar posição
           const trade = await recordSell(symbol, currentPrice, 'STOP_LOSS');
           const profit = trade ? trade.profit : 0;
           await telegram.sendMessage(telegram.formatTrade('SELL', { symbol, price: currentPrice.toFixed(2), quantity: pos.quantity, profit: profit.toFixed(2) }));
           await telegram.sendMessage(telegram.formatAlert(`🛑 Stop-Loss activado em ${symbol}!\nResultado: ${profit >= 0 ? '+' : ''}$${profit.toFixed(2)}\n⏳ Cooldown de 2h activo.`));
-        } catch (e) { logger.error(`Erro venda stop-loss ${symbol}`, { message: e.message }); }
-        pos.inPosition = false; pos.entryPrice = null; pos.quantity = null;
-        pos.highestPrice = null; pos.lastStopLoss = Date.now();
-        await persistPositions();
+          pos.inPosition = false; pos.entryPrice = null; pos.quantity = null;
+          pos.highestPrice = null; pos.lastStopLoss = Date.now();
+          await persistPositions();
+        } catch (e) {
+          logger.error(`Erro venda stop-loss ${symbol} — POSIÇÃO MANTIDA`, { message: e.message });
+          await telegram.sendMessage(telegram.formatAlert(
+            `⚠️ VENDA FALHOU: ${symbol} (Stop-Loss)\nErro: ${e.message}\nPosição mantida — retry no próximo ciclo.`
+          ));
+        }
         continue;
       }
 
@@ -472,14 +530,20 @@ async function runCycle() {
       if (currentPrice >= pos.takeProfit) {
         try {
           await placeOrder(symbol, 'SELL', pos.quantity);
+          // ✅ Venda confirmada — agora sim, limpar posição
           const trade = await recordSell(symbol, currentPrice, 'TAKE_PROFIT');
           const profit = trade ? trade.profit : 0;
           await telegram.sendMessage(telegram.formatTrade('SELL', { symbol, price: currentPrice.toFixed(2), quantity: pos.quantity, profit: profit.toFixed(2) }));
           await telegram.sendMessage(telegram.formatAlert(`🎯 Take-Profit atingido em ${symbol}!\nResultado: +$${profit.toFixed(2)}`));
-        } catch (e) { logger.error(`Erro venda take-profit ${symbol}`, { message: e.message }); }
-        pos.inPosition = false; pos.entryPrice = null; pos.quantity = null;
-        pos.highestPrice = null; pos.lastStopLoss = null;
-        await persistPositions();
+          pos.inPosition = false; pos.entryPrice = null; pos.quantity = null;
+          pos.highestPrice = null; pos.lastStopLoss = null;
+          await persistPositions();
+        } catch (e) {
+          logger.error(`Erro venda take-profit ${symbol} — POSIÇÃO MANTIDA`, { message: e.message });
+          await telegram.sendMessage(telegram.formatAlert(
+            `⚠️ VENDA FALHOU: ${symbol} (Take-Profit)\nErro: ${e.message}\nPosição mantida — retry no próximo ciclo.`
+          ));
+        }
         continue;
       }
 
@@ -487,14 +551,20 @@ async function runCycle() {
       if (data.signal === 'SELL' && news.signal === 'NEGATIVE') {
         try {
           await placeOrder(symbol, 'SELL', pos.quantity);
+          // ✅ Venda confirmada — agora sim, limpar posição
           const trade = await recordSell(symbol, currentPrice, 'SIGNAL');
           const profit = trade ? trade.profit : 0;
           await telegram.sendMessage(telegram.formatTrade('SELL', { symbol, price: currentPrice.toFixed(2), quantity: pos.quantity, profit: profit.toFixed(2) }));
           await telegram.sendMessage(telegram.formatAlert(`⚠️ Venda antecipada em ${symbol}\nSinal técnico + macro negativo\nResultado: ${profit >= 0 ? '+' : ''}$${profit.toFixed(2)}`));
-        } catch (e) { logger.error(`Erro venda signal ${symbol}`, { message: e.message }); }
-        pos.inPosition = false; pos.entryPrice = null; pos.quantity = null;
-        pos.highestPrice = null; pos.lastStopLoss = Date.now();
-        await persistPositions();
+          pos.inPosition = false; pos.entryPrice = null; pos.quantity = null;
+          pos.highestPrice = null; pos.lastStopLoss = Date.now();
+          await persistPositions();
+        } catch (e) {
+          logger.error(`Erro venda signal ${symbol} — POSIÇÃO MANTIDA`, { message: e.message });
+          await telegram.sendMessage(telegram.formatAlert(
+            `⚠️ VENDA FALHOU: ${symbol} (Signal)\nErro: ${e.message}\nPosição mantida — retry no próximo ciclo.`
+          ));
+        }
       }
     }
 
@@ -691,21 +761,31 @@ async function runCycle() {
 }
 
 // ─────────────────────────────────────────────────────
-// START — com retry em vez de crash
-// Se a Binance rejeitar (IP errado), espera 60s e tenta outra vez
-// Tu adicionas o IP na Binance com calma, o bot arranca sozinho
+// START — com retry, proxy logging, e validação bidirecional
 // ─────────────────────────────────────────────────────
 async function start() {
   logger.info('Bot multi-par arrancado', { pairs: PAIRS });
 
-  // Log do IP — SEMPRE funciona, não depende da Binance
+  // Log de segurança
+  logger.info('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+  if (ED25519_KEY_PEM) {
+    logger.info('🔑 ASSINATURA: Ed25519 — IP Unrestricted');
+    logger.info('Deploys não afectam a ligação à Binance');
+  } else if (SECRET_KEY) {
+    logger.info('🔑 ASSINATURA: HMAC (legacy) — IP RESTRITO');
+    logger.info('⚠️  Cada deploy pode mudar o IP — migra para Ed25519!');
+  } else {
+    logger.error('❌ SEM CHAVE — configura ED25519_PRIVATE_KEY ou BINANCE_SECRET_KEY');
+  }
+  if (PROXY_URL) {
+    logger.info('🔒 PROXY ACTIVO — IP fixo via QuotaGuard');
+  }
+  logger.info('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+
+  // Log do IP (informativo)
   try {
     const ipRes = await axios.get('https://api.ipify.org');
-    const ip = ipRes.data;
-    logger.info('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-    logger.info(`🌐 RAILWAY IP: ${ip}`);
-    logger.info('Adiciona este IP na Binance API Management');
-    logger.info('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+    logger.info(`🌐 IP público Railway: ${ipRes.data}${ED25519_KEY_PEM ? ' (irrelevante com Ed25519)' : ' — adiciona na Binance!'}`);
   } catch(e) {
     logger.warn('Não conseguiu obter IP público');
   }
@@ -720,25 +800,18 @@ async function start() {
   while (balance === null) {
     attempts++;
     try {
-      // Tentar validar posições contra Binance real
-      const timestamp = Date.now();
-      const recvWindow = 60000;
-      const query = `timestamp=${timestamp}&recvWindow=${recvWindow}`;
-      const signature = sign(query);
-      const res = await axios.get(`${BASE_URL}/v3/account`, {
-        headers: { 'X-MBX-APIKEY': API_KEY },
-        params: { timestamp, recvWindow, signature }
-      });
-
-      // Se chegou aqui, a Binance aceitou!
-      const balances = res.data.balances;
+      const accountData = await getAccountData();
+      const balances = accountData.balances;
       const usdc = balances.find(b => b.asset === 'USDC');
       balance = parseFloat(usdc?.free || 0);
 
       logger.info('Saldo obtido com sucesso', { balance, tentativas: attempts });
 
-      // Validar posições fantasma
+      // ─── VALIDAÇÃO BIDIRECIONAL ───
+
       let positionsFixed = false;
+
+      // DIRECÇÃO 1: BD diz "em posição" mas Binance não tem → fantasma clássico
       for (const symbol of PAIRS) {
         const pos = positions[symbol];
         if (!pos.inPosition) continue;
@@ -775,16 +848,73 @@ async function start() {
         }
       }
 
+      // DIRECÇÃO 2: Binance tem moeda mas BD não sabe → posição órfã
+      for (const b of balances) {
+        const qty = parseFloat(b.free) + parseFloat(b.locked);
+        if (qty <= 0) continue;
+
+        // Ignorar moedas base (USDC, USDT) e dust
+        if (['USDC', 'USDT'].includes(b.asset)) continue;
+
+        const symbol = b.asset + 'USDC';
+        if (!PAIRS.includes(symbol)) continue; // Só pares que monitorizamos
+
+        const pos = positions[symbol];
+        if (pos.inPosition) continue; // Já está registado — tudo ok
+
+        // Verificar se tem valor mínimo para ser relevante
+        try {
+          const price = await getPrice(symbol);
+          const value = qty * price;
+
+          if (value < MIN_ORPHAN_VALUE_USD) {
+            logger.info(`Dust ignorado: ${b.asset}`, { quantidade: qty, valor: value.toFixed(2) });
+            continue;
+          }
+
+          // Posição órfã encontrada — registar automaticamente
+          logger.warn(`POSIÇÃO ÓRFÃ detectada: ${symbol}`, {
+            quantidade: qty,
+            valor: value.toFixed(2),
+            preco: price.toFixed(2)
+          });
+
+          pos.inPosition = true;
+          pos.entryPrice = price; // Não sabemos o preço real de entrada — usar actual
+          pos.quantity = qty;
+          pos.stopLoss = price * 0.92; // SL conservador 8%
+          pos.takeProfit = price * 1.05; // TP standard 5%
+          pos.highestPrice = price;
+          pos.lastStopLoss = null;
+          positionsFixed = true;
+
+          await telegram.sendMessage(telegram.formatAlert(
+            `🔍 Posição órfã detectada: ${symbol}\n` +
+            `Binance tem: ${qty} ${b.asset} ($${value.toFixed(2)})\n` +
+            `BD não sabia desta posição.\n` +
+            `Registada com SL $${pos.stopLoss.toFixed(2)} / TP $${pos.takeProfit.toFixed(2)}\n` +
+            `⚠️ Preço de entrada estimado (actual): $${price.toFixed(2)}`
+          ));
+        } catch (priceErr) {
+          logger.error(`Não conseguiu preço para órfã ${symbol}`, { message: priceErr.message });
+        }
+      }
+
       if (positionsFixed) {
         await persistPositions();
-        logger.info('Posições fantasma limpas e persistidas');
+        logger.info('Posições corrigidas e persistidas');
       }
 
     } catch (err) {
       const isAuthError = err.response?.data?.code === -2015;
       if (isAuthError) {
-        logger.warn(`⏳ Binance rejeitou (IP não autorizado) — tentativa ${attempts}. A esperar 60s para retry...`);
-        logger.warn('Adiciona o IP mostrado acima na Binance API Management');
+        logger.warn(`⏳ Binance rejeitou — tentativa ${attempts}. A esperar 60s para retry...`);
+        if (ED25519_KEY_PEM) {
+          logger.error('Ed25519 activo mas rejeitado — verifica se a API key e a private key correspondem');
+        } else {
+          logger.warn('Adiciona o IP mostrado acima na Binance API Management');
+          logger.warn('💡 Migra para Ed25519 para eliminar problemas de IP');
+        }
       } else {
         logger.error(`Erro ao conectar à Binance — tentativa ${attempts}`, {
           message: err.message,
@@ -792,7 +922,6 @@ async function start() {
         });
       }
 
-      // Esperar 60 segundos e tentar outra vez — NÃO crashar
       await new Promise(resolve => setTimeout(resolve, STARTUP_RETRY_MS));
     }
   }
@@ -811,6 +940,8 @@ async function start() {
   const realBal = await getRealBalance(balance);
   risk.setDailyStartBalance(realBal);
 
+  const authStatus = ED25519_KEY_PEM ? '🔑 Ed25519 (IP livre)' : '⚠️ HMAC (IP restrito)';
+
   await telegram.sendMessage(`🚀 <b>Trading Bot arrancou!</b>
 Pares: ${PAIRS.join(', ')}
 BTC → 30min | RSI 40/60
@@ -827,6 +958,7 @@ Trailing Take-Profit: activo após +3%
 Position Sizing: Dinâmico por volatilidade
 Macro Overlay: Fear&Greed + Market Cap + BTC7d + ATH + ETF Flows
 Alerta semestral: 50% lucros activo
+Autenticação: ${authStatus}
 Posições em memória: ${PAIRS.filter(p => positions[p].inPosition).join(', ') || 'nenhuma'}`);
 
   async function loop() {

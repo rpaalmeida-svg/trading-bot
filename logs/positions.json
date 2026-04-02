@@ -1,23 +1,23 @@
 {
   "BTCUSDT": {
-    "inPosition": true,
-    "entryPrice": 68582.86,
-    "stopLoss": 68435.19332,
-    "takeProfit": 72012.003,
-    "quantity": 0.00461
+    "inPosition": false,
+    "entryPrice": null,
+    "stopLoss": 68390.65428,
+    "takeProfit": 70006.5555,
+    "quantity": null
   },
   "ETHUSDT": {
     "inPosition": true,
-    "entryPrice": 2054.5,
-    "stopLoss": 2049.37876,
-    "takeProfit": 2157.225,
-    "quantity": 0.137
+    "entryPrice": 2086.85,
+    "stopLoss": 2128.2508,
+    "takeProfit": 2191.1925,
+    "quantity": 0.1441
   },
   "BNBUSDT": {
     "inPosition": true,
-    "entryPrice": 626.69,
-    "stopLoss": 623.7738,
-    "takeProfit": 658.0245000000001,
-    "quantity": 0.48
+    "entryPrice": 607.33,
+    "stopLoss": 611.9671999999999,
+    "takeProfit": 637.6965,
+    "quantity": 0.521
   }
 }
