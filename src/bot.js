@@ -295,6 +295,7 @@ function sendDashboardUpdate(balance, realBalance, validAnalyses, sentiment, new
 
     updateDashboard({
       balance: displayBalance.toFixed(2),
+      usdcBalance: balance.toFixed(2),
       initialBalance: initialBalance ? initialBalance.toFixed(2) : displayBalance.toFixed(2),
       balanceChange,
       balanceChangePct,

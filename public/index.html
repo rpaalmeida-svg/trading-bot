@@ -277,7 +277,7 @@
     <!-- METRICS -->
     <div class="metrics">
       <div class="metric">
-        <div class="metric-label">Saldo</div>
+        <div class="metric-label">Saldo Total</div>
         <div class="metric-value green" id="balance">—</div>
       </div>
       <div class="metric">
@@ -314,7 +314,7 @@
         <div class="metric-label">Variação desde o início</div>
         <div class="variation-main" id="balance-change">—</div>
         <div class="variation-pct" id="balance-change-pct">—</div>
-        <div class="variation-ref">Saldo inicial: <span id="initial-balance">—</span></div>
+        <div class="variation-ref">Saldo inicial: <span id="initial-balance">—</span> · Disponível: <span id="usdc-available" style="color:var(--blue);">—</span></div>
       </div>
     </div>
 
@@ -601,6 +601,7 @@
 
       // ─── TOP METRICS ───
       document.getElementById('balance').textContent = '$' + fmt(data.balance);
+      document.getElementById('usdc-available').textContent = '$' + fmt(data.usdcBalance || 0);
       document.getElementById('price').textContent = '$' + fmt(data.price || 0);
 
       var rsiEl = document.getElementById('rsi');
