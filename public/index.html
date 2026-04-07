@@ -74,6 +74,7 @@
 
     .container { max-width: 1600px; margin: 0 auto; padding: 24px; }
 
+    /* ─── METRICS ROW ─── */
     .metrics { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; margin-bottom: 20px; }
     .metric {
       background: var(--bg3); border: 1px solid var(--border);
@@ -91,6 +92,7 @@
     .variation-pct { font-family: var(--font-mono); font-size: 0.9rem; font-weight: 600; }
     .variation-ref { font-size: 0.68rem; color: var(--muted); margin-top: 4px; }
 
+    /* ─── SECTION ─── */
     .section {
       background: var(--bg3); border: 1px solid var(--border);
       border-radius: 12px; padding: 20px; margin-bottom: 20px;
@@ -101,7 +103,59 @@
       display: flex; align-items: center; gap: 8px;
     }
     .section-title::after { content: ''; flex: 1; height: 1px; background: var(--border); }
+    .section-title .count {
+      background: var(--blue2); color: #fff; font-size: 0.65rem;
+      padding: 2px 8px; border-radius: 10px; font-weight: 700;
+    }
 
+    /* ─── OPEN POSITIONS — cards em destaque ─── */
+    .positions-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 14px; margin-bottom: 20px; }
+    .pos-card {
+      background: var(--bg3); border: 1px solid var(--blue2);
+      border-radius: 12px; padding: 18px;
+      box-shadow: 0 0 20px rgba(31,111,235,0.12);
+    }
+    .pos-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; }
+    .pos-name { font-family: var(--font-mono); font-size: 1rem; font-weight: 700; }
+    .pos-pnl { font-family: var(--font-mono); font-size: 0.9rem; font-weight: 700; padding: 3px 10px; border-radius: 6px; }
+    .pos-rows { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    .pos-item .plabel { font-size: 0.65rem; color: var(--muted); margin-bottom: 2px; text-transform: uppercase; letter-spacing: 0.8px; }
+    .pos-item .pvalue { font-family: var(--font-mono); font-size: 0.9rem; font-weight: 600; color: var(--text); }
+    .progress-bar { height: 6px; background: var(--border); border-radius: 3px; margin-top: 10px; overflow: hidden; }
+    .progress-fill { height: 100%; border-radius: 3px; transition: width 0.8s; }
+    .progress-labels { display: flex; justify-content: space-between; font-size: 0.65rem; margin-bottom: 4px; font-family: var(--font-mono); }
+    .no-positions { color: var(--muted); font-size: 0.85rem; font-family: var(--font-mono); padding: 16px 0; }
+
+    /* ─── MONITORING TABLE — todos os pares compactos ─── */
+    .monitor-table { width: 100%; border-collapse: collapse; }
+    .monitor-table th {
+      text-align: left; font-size: 0.65rem; color: var(--muted);
+      text-transform: uppercase; letter-spacing: 1px; padding: 8px 10px;
+      border-bottom: 1px solid var(--border2); font-weight: 600;
+    }
+    .monitor-table td {
+      padding: 10px; font-size: 0.82rem; font-family: var(--font-mono);
+      border-bottom: 1px solid var(--border);
+    }
+    .monitor-table tr:last-child td { border-bottom: none; }
+    .monitor-table tr:hover { background: var(--bg4); }
+    .monitor-table .symbol-cell { font-weight: 700; font-size: 0.85rem; }
+    .monitor-table .active-row { background: rgba(31,111,235,0.06); }
+    .signal-badge {
+      font-family: var(--font-mono); font-size: 0.68rem; font-weight: 700;
+      padding: 2px 8px; border-radius: 4px; display: inline-block;
+    }
+    .signal-BUY { background: rgba(63,185,80,0.15); color: var(--green); }
+    .signal-SELL { background: rgba(248,81,73,0.15); color: var(--red); }
+    .signal-WAIT { background: var(--bg4); color: var(--muted); }
+    .score-pill {
+      display: inline-flex; align-items: center; gap: 4px;
+      font-family: var(--font-mono); font-size: 0.78rem; font-weight: 600;
+    }
+    .score-dot { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; }
+    .status-dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+
+    /* ─── FEAR & GREED ─── */
     .fg-wrap { padding: 4px 0 8px; }
     .fg-bar-container {
       position: relative; height: 8px; border-radius: 4px;
@@ -125,27 +179,7 @@
     .macro-item:last-child { border-bottom: none; }
     .macro-item .icon { font-size: 0.9rem; flex-shrink: 0; width: 20px; }
 
-    .pairs-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 14px; margin-bottom: 20px; }
-    .pair-card {
-      background: var(--bg3); border: 1px solid var(--border);
-      border-radius: 12px; padding: 18px; transition: border-color 0.3s, box-shadow 0.3s;
-    }
-    .pair-card.active { border-color: var(--blue2); box-shadow: 0 0 20px rgba(31,111,235,0.12); }
-    .pair-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; }
-    .pair-name { font-family: var(--font-mono); font-size: 1rem; font-weight: 700; }
-    .pair-signal {
-      font-family: var(--font-mono); font-size: 0.7rem; font-weight: 700;
-      padding: 3px 10px; border-radius: 6px; background: var(--bg4); border: 1px solid var(--border2);
-    }
-    .pair-rows { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-    .pair-item .plabel { font-size: 0.65rem; color: var(--muted); margin-bottom: 2px; text-transform: uppercase; letter-spacing: 0.8px; }
-    .pair-item .pvalue { font-family: var(--font-mono); font-size: 0.9rem; font-weight: 600; color: var(--text); }
-    .score-bar { height: 4px; border-radius: 2px; background: var(--border); margin-top: 14px; overflow: hidden; }
-    .score-fill { height: 100%; border-radius: 2px; transition: width 0.8s cubic-bezier(0.4,0,0.2,1); }
-    .progress-bar { height: 6px; background: var(--border); border-radius: 3px; margin-top: 10px; overflow: hidden; }
-    .progress-fill { height: 100%; border-radius: 3px; transition: width 0.8s; }
-    .progress-labels { display: flex; justify-content: space-between; font-size: 0.65rem; margin-bottom: 4px; font-family: var(--font-mono); }
-
+    /* ─── CHARTS ─── */
     .charts-section { margin-bottom: 20px; }
     .charts-section-title {
       font-size: 0.72rem; font-weight: 600; text-transform: uppercase;
@@ -153,6 +187,18 @@
       display: flex; align-items: center; gap: 8px;
     }
     .charts-section-title::after { content: ''; flex: 1; height: 1px; background: var(--border); }
+    .chart-tabs {
+      display: flex; gap: 6px; margin-bottom: 14px; flex-wrap: wrap;
+    }
+    .chart-tab {
+      font-family: var(--font-mono); font-size: 0.72rem; font-weight: 600;
+      padding: 5px 12px; border-radius: 6px; cursor: pointer;
+      background: var(--bg4); border: 1px solid var(--border2); color: var(--muted);
+      transition: all 0.2s;
+    }
+    .chart-tab:hover { border-color: var(--blue); color: var(--text); }
+    .chart-tab.active { background: var(--blue2); border-color: var(--blue); color: #fff; }
+    .chart-tab.has-position { border-color: var(--blue2); color: var(--blue); }
     .charts-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(400px, 1fr)); gap: 14px; }
     .chart-card { background: var(--bg3); border: 1px solid var(--border); border-radius: 12px; overflow: hidden; }
     .chart-header {
@@ -163,6 +209,7 @@
     .chart-badge { font-size: 0.65rem; font-weight: 600; padding: 2px 8px; border-radius: 4px; font-family: var(--font-mono); }
     .chart-body { height: 300px; }
 
+    /* ─── STATS & TRADES ─── */
     .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 10px; margin-bottom: 16px; }
     .stat-card { background: var(--bg4); border-radius: 8px; padding: 12px; text-align: center; border: 1px solid var(--border); }
     .stat-label { font-size: 0.65rem; color: var(--muted); text-transform: uppercase; letter-spacing: 1px; margin-bottom: 6px; }
@@ -181,6 +228,7 @@
     .badge-win { background: rgba(63,185,80,0.12); color: var(--green); border: 1px solid rgba(63,185,80,0.2); }
     .badge-loss { background: rgba(248,81,73,0.12); color: var(--red); border: 1px solid rgba(248,81,73,0.2); }
 
+    /* ─── LOG ─── */
     .log-list { list-style: none; max-height: 180px; overflow-y: auto; }
     .log-list li {
       padding: 7px 0; border-bottom: 1px solid var(--border);
@@ -206,6 +254,8 @@
       .two-col { grid-template-columns: 1fr; }
       .charts-grid { grid-template-columns: 1fr; }
       .trade-row { grid-template-columns: 1fr 1fr; }
+      .monitor-table { font-size: 0.75rem; }
+      .monitor-table th, .monitor-table td { padding: 8px 6px; }
     }
   </style>
 </head>
@@ -224,13 +274,14 @@
 
   <div class="container">
 
+    <!-- METRICS -->
     <div class="metrics">
       <div class="metric">
         <div class="metric-label">Saldo</div>
         <div class="metric-value green" id="balance">—</div>
       </div>
       <div class="metric">
-        <div class="metric-label">BTC/USDT</div>
+        <div class="metric-label">BTC/USDC</div>
         <div class="metric-value" id="price">—</div>
       </div>
       <div class="metric">
@@ -267,35 +318,45 @@
       </div>
     </div>
 
-    <div class="pairs-grid" id="pairs-grid"></div>
-
-    <div class="charts-section">
-      <div class="charts-section-title">📡 Mercado ao Vivo — TradingView</div>
-      <div class="charts-grid">
-        <div class="chart-card">
-          <div class="chart-header">
-            <div class="chart-title">BTC / USDT</div>
-            <div class="chart-badge" style="background:rgba(247,147,26,0.15);color:#f7931a;border:1px solid rgba(247,147,26,0.2);">Bitcoin · 1h</div>
-          </div>
-          <div class="chart-body" id="chart-btc"></div>
-        </div>
-        <div class="chart-card">
-          <div class="chart-header">
-            <div class="chart-title">ETH / USDT</div>
-            <div class="chart-badge" style="background:rgba(98,126,234,0.15);color:#627eea;border:1px solid rgba(98,126,234,0.2);">Ethereum · 30m</div>
-          </div>
-          <div class="chart-body" id="chart-eth"></div>
-        </div>
-        <div class="chart-card">
-          <div class="chart-header">
-            <div class="chart-title">BNB / USDT</div>
-            <div class="chart-badge" style="background:rgba(243,186,47,0.15);color:#f3ba2f;border:1px solid rgba(243,186,47,0.2);">Binance Coin · 1h</div>
-          </div>
-          <div class="chart-body" id="chart-bnb"></div>
-        </div>
+    <!-- OPEN POSITIONS -->
+    <div class="section">
+      <div class="section-title">🔵 Posições Abertas <span class="count" id="pos-count">0</span></div>
+      <div class="positions-grid" id="positions-grid">
+        <div class="no-positions">Sem posições abertas</div>
       </div>
     </div>
 
+    <!-- MONITORING TABLE -->
+    <div class="section">
+      <div class="section-title">📡 Monitorização — 9 Pares</div>
+      <div style="overflow-x:auto;">
+        <table class="monitor-table">
+          <thead>
+            <tr>
+              <th></th>
+              <th>Par</th>
+              <th>Preço</th>
+              <th>RSI</th>
+              <th>Score</th>
+              <th>Sinal</th>
+              <th>Trend 4h</th>
+              <th>ATR%</th>
+              <th>Intervalo</th>
+            </tr>
+          </thead>
+          <tbody id="monitor-body"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- CHARTS with tabs -->
+    <div class="charts-section">
+      <div class="charts-section-title">📈 Gráficos — TradingView</div>
+      <div class="chart-tabs" id="chart-tabs"></div>
+      <div class="charts-grid" id="charts-grid"></div>
+    </div>
+
+    <!-- FEAR & GREED + MACRO -->
     <div class="two-col">
       <div class="section">
         <div class="section-title">📊 Fear &amp; Greed Index</div>
@@ -323,6 +384,7 @@
       </div>
     </div>
 
+    <!-- PERFORMANCE -->
     <div class="section">
       <div class="section-title">📈 Performance &amp; Histórico</div>
       <div class="stats-grid">
@@ -346,6 +408,7 @@
       <div class="trades-list" id="trades-list"></div>
     </div>
 
+    <!-- LOG -->
     <div class="section">
       <div class="section-title">📋 Últimos Eventos</div>
       <ul class="log-list" id="log-list"></ul>
@@ -357,34 +420,118 @@
 
   <script src="https://s3.tradingview.com/tv.js"></script>
   <script>
+    // ─── CHART MANAGEMENT ───
+    // Mostra BTC sempre + pares com posições abertas. Tabs para alternar.
+    var CHART_PAIRS = {
+      BTCUSDC: { tvSymbol: 'BINANCE:BTCUSDT', label: 'BTC', color: '#f7931a', interval: '60' },
+      ETHUSDC: { tvSymbol: 'BINANCE:ETHUSDT', label: 'ETH', color: '#627eea', interval: '60' },
+      BNBUSDC: { tvSymbol: 'BINANCE:BNBUSDT', label: 'BNB', color: '#f3ba2f', interval: '60' },
+      SOLUSDC: { tvSymbol: 'BINANCE:SOLUSDT', label: 'SOL', color: '#9945ff', interval: '60' },
+      XRPUSDC: { tvSymbol: 'BINANCE:XRPUSDT', label: 'XRP', color: '#00aae4', interval: '60' },
+      LINKUSDC: { tvSymbol: 'BINANCE:LINKUSDT', label: 'LINK', color: '#2a5ada', interval: '60' },
+      ADAUSDC: { tvSymbol: 'BINANCE:ADAUSDT', label: 'ADA', color: '#0033ad', interval: '60' },
+      DOGEUSDC: { tvSymbol: 'BINANCE:DOGEUSDT', label: 'DOGE', color: '#c2a633', interval: '60' },
+      SUIUSDC: { tvSymbol: 'BINANCE:SUIUSDT', label: 'SUI', color: '#4da2ff', interval: '60' }
+    };
+
+    var activeCharts = ['BTCUSDC', 'ETHUSDC']; // Default: BTC + ETH
+    var chartWidgets = {};
+
     function createChart(containerId, symbol, interval) {
-      new TradingView.widget({
-        container_id: containerId,
-        autosize: true,
-        symbol: symbol,
-        interval: interval,
-        timezone: "Europe/Lisbon",
-        theme: "dark",
-        style: "1",
-        locale: "pt",
-        backgroundColor: "rgba(8, 12, 16, 1)",
-        gridColor: "rgba(33, 38, 45, 0.6)",
-        hide_top_toolbar: false,
-        hide_legend: true,
-        save_image: false,
-        hide_volume: true,
-        studies: ["RSI@tv-basicstudies"],
-        withdateranges: false,
-        allow_symbol_change: false,
-        show_popup_button: false
-      });
+      if (!document.getElementById(containerId)) return;
+      try {
+        new TradingView.widget({
+          container_id: containerId,
+          autosize: true,
+          symbol: symbol,
+          interval: interval,
+          timezone: "Europe/Lisbon",
+          theme: "dark",
+          style: "1",
+          locale: "pt",
+          backgroundColor: "rgba(8, 12, 16, 1)",
+          gridColor: "rgba(33, 38, 45, 0.6)",
+          hide_top_toolbar: false,
+          hide_legend: true,
+          save_image: false,
+          hide_volume: true,
+          studies: ["RSI@tv-basicstudies"],
+          withdateranges: false,
+          allow_symbol_change: false,
+          show_popup_button: false
+        });
+      } catch(e) { console.error('Chart error:', e); }
     }
 
-    createChart("chart-btc", "BINANCE:BTCUSDT", "60");
-    createChart("chart-eth", "BINANCE:ETHUSDT", "30");
-    createChart("chart-bnb", "BINANCE:BNBUSDT", "60");
+    function renderCharts(pairsWithPositions) {
+      // Sempre BTC + pares com posição aberta (máx 3 gráficos)
+      var toShow = ['BTCUSDC'];
+      pairsWithPositions.forEach(function(p) {
+        if (p !== 'BTCUSDC' && toShow.length < 3) toShow.push(p);
+      });
+      // Se menos de 2, adicionar ETH
+      if (toShow.length < 2 && toShow.indexOf('ETHUSDC') === -1) toShow.push('ETHUSDC');
 
-    // Formata números: ponto nos milhares, vírgula nos cêntimos — sempre consistente
+      // Render tabs
+      var tabsHtml = '';
+      Object.keys(CHART_PAIRS).forEach(function(key) {
+        var cp = CHART_PAIRS[key];
+        var isActive = toShow.indexOf(key) !== -1;
+        var hasPos = pairsWithPositions.indexOf(key) !== -1;
+        tabsHtml += '<div class="chart-tab' + (isActive ? ' active' : '') + (hasPos ? ' has-position' : '') + '" data-pair="' + key + '">' +
+          (hasPos ? '🔵 ' : '') + cp.label + '</div>';
+      });
+      document.getElementById('chart-tabs').innerHTML = tabsHtml;
+
+      // Só re-render se os pares mudaram
+      var newKey = toShow.sort().join(',');
+      var oldKey = activeCharts.sort().join(',');
+      if (newKey === oldKey) return;
+      activeCharts = toShow;
+
+      // Render chart cards
+      var gridHtml = '';
+      toShow.forEach(function(key) {
+        var cp = CHART_PAIRS[key];
+        gridHtml += '<div class="chart-card">' +
+          '<div class="chart-header">' +
+            '<div class="chart-title">' + cp.label + ' / USDC</div>' +
+            '<div class="chart-badge" style="background:' + cp.color + '22;color:' + cp.color + ';border:1px solid ' + cp.color + '33;">' + cp.label + ' · 1h</div>' +
+          '</div>' +
+          '<div class="chart-body" id="chart-' + key + '"></div>' +
+        '</div>';
+      });
+      document.getElementById('charts-grid').innerHTML = gridHtml;
+
+      // Init charts after DOM update
+      setTimeout(function() {
+        toShow.forEach(function(key) {
+          var cp = CHART_PAIRS[key];
+          createChart('chart-' + key, cp.tvSymbol, cp.interval);
+        });
+      }, 100);
+    }
+
+    // Tab click — swap a chart
+    document.getElementById('chart-tabs').addEventListener('click', function(e) {
+      var tab = e.target.closest('.chart-tab');
+      if (!tab) return;
+      var pair = tab.dataset.pair;
+      if (activeCharts.indexOf(pair) !== -1) return; // já está visível
+
+      // Substituir o último não-BTC
+      var replaceIdx = activeCharts.length - 1;
+      if (activeCharts[replaceIdx] === 'BTCUSDC' && activeCharts.length > 1) replaceIdx = activeCharts.length - 1;
+      activeCharts[replaceIdx] = pair;
+
+      var fakePositions = activeCharts.filter(function(p) { return p !== 'BTCUSDC'; });
+      renderCharts(fakePositions);
+    });
+
+    // Init default charts
+    renderCharts([]);
+
+    // ─── FORMATTING ───
     function fmt(n, decimals) {
       var d = decimals !== undefined ? decimals : 2;
       var fixed = parseFloat(n).toFixed(d);
@@ -393,32 +540,37 @@
       return d > 0 ? parts[0] + ',' + parts[1] : parts[0];
     }
 
-    const socket = io();
-    const logs = [];
-
     function rsiColor(v) {
       var n = parseFloat(v);
       if (n < 35) return 'green';
       if (n > 65) return 'red';
       return 'yellow';
     }
-
     function scoreColor(s) {
       if (s >= 75) return 'var(--green)';
       if (s >= 55) return 'var(--yellow)';
       return 'var(--red)';
     }
-
     function fgColor(v) {
       if (v <= 25) return 'green';
       if (v <= 55) return 'yellow';
       if (v <= 75) return 'orange';
       return 'red';
     }
+    function trendIcon(t) {
+      if (t === 'BULLISH') return '<span class="green">▲</span>';
+      if (t === 'BEARISH') return '<span class="red">▼</span>';
+      return '<span class="yellow">—</span>';
+    }
+
+    // ─── SOCKET ───
+    var socket = io();
+    var logs = [];
 
     socket.on('update', function(data) {
       if (!data || !data.balance) return;
 
+      // ─── TOP METRICS ───
       document.getElementById('balance').textContent = '$' + fmt(data.balance);
       document.getElementById('price').textContent = '$' + fmt(data.price || 0);
 
@@ -444,6 +596,7 @@
       document.getElementById('initial-balance').textContent = '$' + fmt(data.initialBalance || 0);
       document.getElementById('variation-card').style.borderColor = change >= 0 ? 'var(--green)' : 'var(--red)';
 
+      // ─── NEWS / MACRO ───
       if (data.news) {
         var newsEmoji = data.news === 'POSITIVE' ? '📈' : data.news === 'NEGATIVE' ? '📉' : '📊';
         var newsColor = data.news === 'POSITIVE' ? 'var(--green)' : data.news === 'NEGATIVE' ? 'var(--red)' : 'var(--yellow)';
@@ -465,6 +618,7 @@
         }
       }
 
+      // ─── STATS ───
       var stats = data.stats || {};
       var pnl = stats.totalProfit || 0;
       var pnlEl = document.getElementById('pnl-total');
@@ -477,11 +631,13 @@
       document.getElementById('s-best').textContent = stats.bestTrade ? '+$' + fmt(stats.bestTrade.profit) : '—';
       document.getElementById('s-worst').textContent = stats.worstTrade ? '$' + fmt(stats.worstTrade.profit) : '—';
 
+      // ─── TRADES LIST ───
       if (stats.recentTrades && stats.recentTrades.length > 0) {
         document.getElementById('trades-list').innerHTML = stats.recentTrades.map(function(t) {
+          var sym = t.symbol.replace('USDT', '/USDT').replace('USDC', '/USDC');
           return '<div class="trade-row">' +
             '<span class="trade-time">' + new Date(t.closeTimestamp).toLocaleString('pt-PT') + '</span>' +
-            '<span class="trade-symbol">' + t.symbol.replace('USDT', '/USDT') + '</span>' +
+            '<span class="trade-symbol">' + sym + '</span>' +
             '<span class="trade-prices">$' + fmt(t.price) + ' → $' + fmt(t.closePrice) + '</span>' +
             '<span class="trade-badge ' + (t.profit >= 0 ? 'badge-win' : 'badge-loss') + '">' + (t.profit >= 0 ? '+' : '') + '$' + fmt(t.profit) + '</span>' +
           '</div>';
@@ -490,15 +646,20 @@
         document.getElementById('trades-list').innerHTML = '<div style="color:var(--muted);margin-top:12px;font-size:0.8rem;font-family:var(--font-mono);">Sem trades concluídos ainda</div>';
       }
 
-      var hasPosition = data.pairs && data.pairs.some(function(p) { return p.inPosition; });
-      document.getElementById('status-text').textContent = hasPosition
-        ? '🔵 ' + data.pairs.filter(function(p) { return p.inPosition; }).length + ' posição(ões) abertas'
-        : '🟢 Bot activo — a monitorizar';
-
+      // ─── PAIRS DATA ───
       if (data.pairs) {
-        document.getElementById('pairs-grid').innerHTML = data.pairs.map(function(p) {
-          var positionHTML = '';
-          if (p.inPosition && p.entryPrice) {
+        var openPairs = data.pairs.filter(function(p) { return p.inPosition; });
+        var allPairs = data.pairs;
+
+        // Status header
+        document.getElementById('pos-count').textContent = openPairs.length;
+        document.getElementById('status-text').textContent = openPairs.length > 0
+          ? '🔵 ' + openPairs.length + ' posição(ões) abertas'
+          : '🟢 Bot activo — a monitorizar ' + allPairs.length + ' pares';
+
+        // ─── OPEN POSITIONS CARDS ───
+        if (openPairs.length > 0) {
+          document.getElementById('positions-grid').innerHTML = openPairs.map(function(p) {
             var sl = parseFloat(p.stopLoss);
             var tp = parseFloat(p.takeProfit);
             var current = parseFloat(p.currentPrice);
@@ -507,82 +668,79 @@
             var pnlColor = parseFloat(pnlPct) >= 0 ? 'green' : 'red';
             var progress = Math.min(100, Math.max(0, ((current - sl) / (tp - sl)) * 100));
             var progressColor = progress > 66 ? 'var(--green)' : progress > 33 ? 'var(--yellow)' : 'var(--red)';
+            var sym = p.symbol.replace('USDC', '/USDC');
 
-            positionHTML =
-              '<div class="pair-item">' +
-                '<div class="plabel">Entrada</div>' +
-                '<div class="pvalue">$' + fmt(entry) + '</div>' +
-              '</div>' +
-              '<div class="pair-item">' +
-                '<div class="plabel">P&amp;L Actual</div>' +
-                '<div class="pvalue ' + pnlColor + '">' + (parseFloat(pnlPct) >= 0 ? '+' : '') + pnlPct + '%</div>' +
-              '</div>' +
-              '<div class="pair-item">' +
-                '<div class="plabel">Stop-Loss</div>' +
-                '<div class="pvalue red">$' + fmt(sl) + '</div>' +
-              '</div>' +
-              '<div class="pair-item">' +
-                '<div class="plabel">Take-Profit</div>' +
-                '<div class="pvalue green">$' + fmt(tp) + '</div>' +
-              '</div>' +
-              '<div class="pair-item" style="grid-column:span 2;margin-top:6px;">' +
-                '<div class="progress-labels">' +
-                  '<span style="color:var(--red);">SL $' + fmt(sl, 0) + '</span>' +
-                  '<span style="color:var(--text);font-weight:700;">$' + fmt(current, 0) + '</span>' +
-                  '<span style="color:var(--green);">TP $' + fmt(tp, 0) + '</span>' +
+            return '<div class="pos-card">' +
+              '<div class="pos-header">' +
+                '<div class="pos-name">' + sym + '</div>' +
+                '<div class="pos-pnl" style="background:' + (parseFloat(pnlPct) >= 0 ? 'rgba(63,185,80,0.15)' : 'rgba(248,81,73,0.15)') + ';color:' + (parseFloat(pnlPct) >= 0 ? 'var(--green)' : 'var(--red)') + '">' +
+                  (parseFloat(pnlPct) >= 0 ? '+' : '') + pnlPct + '%' +
                 '</div>' +
-                '<div class="progress-bar">' +
-                  '<div class="progress-fill" style="width:' + progress + '%;background:' + progressColor + ';"></div>' +
+              '</div>' +
+              '<div class="pos-rows">' +
+                '<div class="pos-item"><div class="plabel">Entrada</div><div class="pvalue">$' + fmt(entry) + '</div></div>' +
+                '<div class="pos-item"><div class="plabel">Actual</div><div class="pvalue">$' + fmt(current) + '</div></div>' +
+                '<div class="pos-item"><div class="plabel">Stop-Loss</div><div class="pvalue red">$' + fmt(sl) + '</div></div>' +
+                '<div class="pos-item"><div class="plabel">Take-Profit</div><div class="pvalue green">$' + fmt(tp) + '</div></div>' +
+                '<div class="pos-item"><div class="plabel">Score</div><div class="pvalue" style="color:' + scoreColor(p.score) + '">' + p.score + '/100</div></div>' +
+                '<div class="pos-item"><div class="plabel">RSI</div><div class="pvalue ' + rsiColor(p.rsi) + '">' + (p.rsi || '—') + '</div></div>' +
+                '<div class="pos-item" style="grid-column:span 2;margin-top:6px;">' +
+                  '<div class="progress-labels">' +
+                    '<span style="color:var(--red);">SL $' + fmt(sl, 0) + '</span>' +
+                    '<span style="color:var(--text);font-weight:700;">$' + fmt(current, 0) + '</span>' +
+                    '<span style="color:var(--green);">TP $' + fmt(tp, 0) + '</span>' +
+                  '</div>' +
+                  '<div class="progress-bar">' +
+                    '<div class="progress-fill" style="width:' + progress + '%;background:' + progressColor + ';"></div>' +
+                  '</div>' +
                 '</div>' +
-              '</div>';
-          }
+              '</div>' +
+            '</div>';
+          }).join('');
+        } else {
+          document.getElementById('positions-grid').innerHTML = '<div class="no-positions">⚪ Sem posições abertas — a monitorizar ' + allPairs.length + ' pares</div>';
+        }
 
-          return '<div class="pair-card ' + (p.inPosition ? 'active' : '') + '">' +
-            '<div class="pair-header">' +
-              '<div class="pair-name">' + p.symbol.replace('USDT', '/USDT') + '</div>' +
-              '<div class="pair-signal ' + (p.signal === 'BUY' ? 'green' : p.signal === 'SELL' ? 'red' : '') + '">' + (p.signal || 'WAIT') + '</div>' +
-            '</div>' +
-            '<div class="pair-rows">' +
-              '<div class="pair-item">' +
-                '<div class="plabel">RSI (14)</div>' +
-                '<div class="pvalue ' + rsiColor(p.rsi) + '">' + (p.rsi || '—') + '</div>' +
-              '</div>' +
-              '<div class="pair-item">' +
-                '<div class="plabel">Score</div>' +
-                '<div class="pvalue" style="color:' + scoreColor(p.score) + '">' + p.score + '/100</div>' +
-              '</div>' +
-              '<div class="pair-item">' +
-                '<div class="plabel">Preço</div>' +
-                '<div class="pvalue">$' + fmt(p.currentPrice || 0) + '</div>' +
-              '</div>' +
-              '<div class="pair-item">' +
-                '<div class="plabel">Estado</div>' +
-                '<div class="pvalue ' + (p.inPosition ? 'blue' : '') + '">' + (p.inPosition ? '🔵 Em posição' : '⚪ Aguardar') + '</div>' +
-              '</div>' +
-              positionHTML +
-            '</div>' +
-            '<div class="score-bar">' +
-              '<div class="score-fill" style="width:' + p.score + '%;background:' + scoreColor(p.score) + '"></div>' +
-            '</div>' +
-          '</div>';
+        // ─── MONITORING TABLE ───
+        document.getElementById('monitor-body').innerHTML = allPairs.map(function(p) {
+          var sym = p.symbol.replace('USDC', '');
+          var isActive = p.inPosition;
+          var cooldown = p.cooldownRestante > 0 ? ' ⏳' + p.cooldownRestante + 'm' : '';
+
+          return '<tr class="' + (isActive ? 'active-row' : '') + '">' +
+            '<td><span class="status-dot" style="background:' + (isActive ? 'var(--blue)' : 'var(--border2)') + ';"></span></td>' +
+            '<td class="symbol-cell">' + sym + cooldown + '</td>' +
+            '<td>$' + fmt(p.currentPrice || 0) + '</td>' +
+            '<td class="' + rsiColor(p.rsi) + '">' + (p.rsi || '—') + '</td>' +
+            '<td><span class="score-pill"><span class="score-dot" style="background:' + scoreColor(p.score) + ';"></span>' + p.score + '</span></td>' +
+            '<td><span class="signal-badge signal-' + (p.signal || 'WAIT') + '">' + (p.signal || 'WAIT') + '</span></td>' +
+            '<td>' + trendIcon(p.trend4h) + ' ' + (p.trend4h || '—') + '</td>' +
+            '<td>' + (p.atrPct || '—') + '%</td>' +
+            '<td style="color:var(--muted);">' + (p.interval || '—') + '</td>' +
+          '</tr>';
         }).join('');
+
+        // ─── UPDATE CHARTS ───
+        var pairsInPosition = openPairs.map(function(p) { return p.symbol; });
+        renderCharts(pairsInPosition);
       }
 
+      // ─── LOG ───
       var now = new Date().toLocaleTimeString('pt-PT');
-      var openPairs = data.pairs
+      var openSymbols = data.pairs
         ? data.pairs.filter(function(p) { return p.inPosition; }).map(function(p) {
-            return p.symbol.replace('USDT', '') + ' ' + (p.entryPrice
+            return p.symbol.replace('USDC', '') + ' ' + (p.entryPrice
               ? ((parseFloat(p.currentPrice) - parseFloat(p.entryPrice)) / parseFloat(p.entryPrice) * 100).toFixed(2) + '%'
               : '');
           })
         : [];
-      logs.unshift({ time: now, msg: 'BTC $' + fmt(data.price || 0) + ' | RSI ' + data.rsi + ' | F&G ' + data.fearGreed + ' | ' + (openPairs.length > 0 ? '🔵 ' + openPairs.join(' | ') : '⚪ Sem posições') });
+      logs.unshift({ time: now, msg: 'BTC $' + fmt(data.price || 0) + ' | RSI ' + data.rsi + ' | F&G ' + data.fearGreed + ' | ' + (openSymbols.length > 0 ? '🔵 ' + openSymbols.join(' | ') : '⚪ Sem posições') });
       if (logs.length > 50) logs.pop();
       document.getElementById('log-list').innerHTML = logs.map(function(l) {
         return '<li><span>' + l.time + '</span>' + l.msg + '</li>';
       }).join('');
 
-      document.getElementById('updated').textContent = 'última actualização: ' + new Date().toLocaleString('pt-PT');
+      document.getElementById('updated').textContent = 'última actualização: ' + new Date().toLocaleString('pt-PT') + ' | 9 pares monitorizados';
     });
   </script>
 

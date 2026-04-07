@@ -1,19 +1,38 @@
 const logger = require('./logger');
 
-const PAIRS = ['BTCUSDC', 'ETHUSDC', 'BNBUSDC'];
+const PAIRS = [
+  'BTCUSDC', 'ETHUSDC', 'BNBUSDC',
+  'SOLUSDC', 'XRPUSDC', 'LINKUSDC',
+  'ADAUSDC', 'DOGEUSDC', 'SUIUSDC'
+];
 
 const PAIR_CONFIG = {
+  // ─── Originais (mantidos) ───
   BTCUSDC: { interval: '30m', rsiBuy: 40, rsiSell: 60, stopLoss: 0.025, takeProfit: 0.05 },
   ETHUSDC: { interval: '1h',  rsiBuy: 35, rsiSell: 65, stopLoss: 0.025, takeProfit: 0.05 },
   BNBUSDC: { interval: '1h',  rsiBuy: 40, rsiSell: 60, stopLoss: 0.025, takeProfit: 0.05 },
+
+  // ─── Novos — configs conservadoras (RSI 35/65, 1h) ───
+  // SOL: alta volatilidade → SL mais largo, TP mais agressivo
+  SOLUSDC: { interval: '1h',  rsiBuy: 35, rsiSell: 65, stopLoss: 0.030, takeProfit: 0.06 },
+  // XRP: menor volatilidade → parâmetros standard
+  XRPUSDC: { interval: '1h',  rsiBuy: 35, rsiSell: 65, stopLoss: 0.025, takeProfit: 0.05 },
+  // LINK: volatilidade média-alta
+  LINKUSDC: { interval: '1h',  rsiBuy: 35, rsiSell: 65, stopLoss: 0.030, takeProfit: 0.06 },
+  // ADA: menor volatilidade, movimentos mais lentos
+  ADAUSDC: { interval: '1h',  rsiBuy: 35, rsiSell: 65, stopLoss: 0.025, takeProfit: 0.05 },
+  // DOGE: alta volatilidade, movimentos rápidos → SL/TP mais largos
+  DOGEUSDC: { interval: '1h', rsiBuy: 35, rsiSell: 65, stopLoss: 0.035, takeProfit: 0.07 },
+  // SUI: novo, volátil → conservador
+  SUIUSDC: { interval: '1h',  rsiBuy: 35, rsiSell: 65, stopLoss: 0.030, takeProfit: 0.06 },
 };
 
 const MIN_SCORE_TO_BUY = 75;
 const MIN_SCORE_SECOND = 80;
 
 // Máximo de posições simultâneas
-// Com contas pequenas (<$50), concentrar capital é mais eficiente
-const MAX_POSITIONS = 2;
+// Com 9 pares e conta pequena, 3 posições dá diversificação sem diluir demais
+const MAX_POSITIONS = 3;
 
 // Mínimo por trade — Binance aceita ~$5 notional na maioria dos pares
 const MIN_TRADE_AMOUNT = 5;

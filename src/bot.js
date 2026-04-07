@@ -942,11 +942,18 @@ async function start() {
 
   const authStatus = ED25519_KEY_PEM ? '🔑 Ed25519 (IP livre)' : '⚠️ HMAC (IP restrito)';
 
+  // Mensagem dinâmica — adapta-se automaticamente aos pares em portfolio.js
+  const pairLines = PAIRS.map(p => {
+    const c = PAIR_CONFIG[p];
+    const asset = p.replace('USDC', '');
+    return `${asset} → ${c.interval} | RSI ${c.rsiBuy}/${c.rsiSell} | SL ${(c.stopLoss*100).toFixed(1)}% | TP ${(c.takeProfit*100).toFixed(0)}%`;
+  }).join('\n');
+
   await telegram.sendMessage(`🚀 <b>Trading Bot arrancou!</b>
-Pares: ${PAIRS.join(', ')}
-BTC → 30min | RSI 40/60
-ETH → 1h | RSI 35/65
-BNB → 1h | RSI 40/60
+Pares: ${PAIRS.length} (${PAIRS.map(p => p.replace('USDC', '')).join(', ')})
+
+${pairLines}
+
 Score mínimo: ${MIN_SCORE_TO_BUY}/100
 Max posições: ${MAX_POSITIONS}
 Min trade: $${MIN_TRADE_AMOUNT}
