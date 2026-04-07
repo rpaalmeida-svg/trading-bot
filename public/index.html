@@ -421,7 +421,8 @@
   <script src="https://s3.tradingview.com/tv.js"></script>
   <script>
     // ─── CHART MANAGEMENT ───
-    // Mostra BTC sempre + pares com posições abertas. Tabs para alternar.
+    // BTC sempre visível (slot 0). Slots 1-2 controlados pelo utilizador via tabs.
+    // Socket updates actualizam tabs (indicadores) mas NÃO sobrepõem a selecção manual.
     var CHART_PAIRS = {
       BTCUSDC: { tvSymbol: 'BINANCE:BTCUSDT', label: 'BTC', color: '#f7931a', interval: '60' },
       ETHUSDC: { tvSymbol: 'BINANCE:ETHUSDT', label: 'ETH', color: '#627eea', interval: '60' },
@@ -434,8 +435,12 @@
       SUIUSDC: { tvSymbol: 'BINANCE:SUIUSDT', label: 'SUI', color: '#4da2ff', interval: '60' }
     };
 
-    var activeCharts = ['BTCUSDC', 'ETHUSDC']; // Default: BTC + ETH
-    var chartWidgets = {};
+    // activeCharts: pares actualmente renderizados [slot0, slot1, slot2?]
+    var activeCharts = ['BTCUSDC', 'ETHUSDC'];
+    // Se o utilizador clicou num tab, ficamos nesse estado até ele clicar noutro
+    var userOverride = false;
+    // Pares com posição aberta (actualizado pelo socket)
+    var currentPositionPairs = [];
 
     function createChart(containerId, symbol, interval) {
       if (!document.getElementById(containerId)) return;
@@ -463,39 +468,15 @@
       } catch(e) { console.error('Chart error:', e); }
     }
 
-    function renderCharts(pairsWithPositions) {
-      // Sempre BTC + pares com posição aberta (máx 3 gráficos)
-      var toShow = ['BTCUSDC'];
-      pairsWithPositions.forEach(function(p) {
-        if (p !== 'BTCUSDC' && toShow.length < 3) toShow.push(p);
-      });
-      // Se menos de 2, adicionar ETH
-      if (toShow.length < 2 && toShow.indexOf('ETHUSDC') === -1) toShow.push('ETHUSDC');
-
-      // Render tabs
-      var tabsHtml = '';
-      Object.keys(CHART_PAIRS).forEach(function(key) {
-        var cp = CHART_PAIRS[key];
-        var isActive = toShow.indexOf(key) !== -1;
-        var hasPos = pairsWithPositions.indexOf(key) !== -1;
-        tabsHtml += '<div class="chart-tab' + (isActive ? ' active' : '') + (hasPos ? ' has-position' : '') + '" data-pair="' + key + '">' +
-          (hasPos ? '🔵 ' : '') + cp.label + '</div>';
-      });
-      document.getElementById('chart-tabs').innerHTML = tabsHtml;
-
-      // Só re-render se os pares mudaram
-      var newKey = toShow.sort().join(',');
-      var oldKey = activeCharts.sort().join(',');
-      if (newKey === oldKey) return;
-      activeCharts = toShow;
-
-      // Render chart cards
+    function buildChartGrid(chartsToShow) {
       var gridHtml = '';
-      toShow.forEach(function(key) {
+      chartsToShow.forEach(function(key) {
         var cp = CHART_PAIRS[key];
+        if (!cp) return;
+        var hasPos = currentPositionPairs.indexOf(key) !== -1;
         gridHtml += '<div class="chart-card">' +
           '<div class="chart-header">' +
-            '<div class="chart-title">' + cp.label + ' / USDC</div>' +
+            '<div class="chart-title">' + (hasPos ? '🔵 ' : '') + cp.label + ' / USDC</div>' +
             '<div class="chart-badge" style="background:' + cp.color + '22;color:' + cp.color + ';border:1px solid ' + cp.color + '33;">' + cp.label + ' · 1h</div>' +
           '</div>' +
           '<div class="chart-body" id="chart-' + key + '"></div>' +
@@ -503,33 +484,81 @@
       });
       document.getElementById('charts-grid').innerHTML = gridHtml;
 
-      // Init charts after DOM update
       setTimeout(function() {
-        toShow.forEach(function(key) {
+        chartsToShow.forEach(function(key) {
           var cp = CHART_PAIRS[key];
-          createChart('chart-' + key, cp.tvSymbol, cp.interval);
+          if (cp) createChart('chart-' + key, cp.tvSymbol, cp.interval);
         });
       }, 100);
     }
 
-    // Tab click — swap a chart
+    function updateTabs() {
+      var tabsHtml = '';
+      Object.keys(CHART_PAIRS).forEach(function(key) {
+        var cp = CHART_PAIRS[key];
+        var isActive = activeCharts.indexOf(key) !== -1;
+        var hasPos = currentPositionPairs.indexOf(key) !== -1;
+        tabsHtml += '<div class="chart-tab' + (isActive ? ' active' : '') + (hasPos ? ' has-position' : '') + '" data-pair="' + key + '">' +
+          (hasPos ? '🔵 ' : '') + cp.label + '</div>';
+      });
+      document.getElementById('chart-tabs').innerHTML = tabsHtml;
+    }
+
+    // Determinar gráficos automáticos (quando não há override do utilizador)
+    function getAutoCharts(positionPairs) {
+      var toShow = ['BTCUSDC'];
+      positionPairs.forEach(function(p) {
+        if (p !== 'BTCUSDC' && toShow.indexOf(p) === -1 && toShow.length < 3) toShow.push(p);
+      });
+      if (toShow.length < 2) toShow.push('ETHUSDC');
+      return toShow;
+    }
+
+    // Chamado pelo socket — actualiza tabs mas só muda gráficos se não há override
+    function onSocketUpdateCharts(positionPairs) {
+      currentPositionPairs = positionPairs;
+
+      if (!userOverride) {
+        var autoCharts = getAutoCharts(positionPairs);
+        var newKey = autoCharts.slice().sort().join(',');
+        var oldKey = activeCharts.slice().sort().join(',');
+
+        if (newKey !== oldKey) {
+          activeCharts = autoCharts;
+          buildChartGrid(activeCharts);
+        }
+      }
+
+      // Tabs sempre actualizados (indicadores de posição)
+      updateTabs();
+    }
+
+    // Tab click — o utilizador escolhe manualmente
     document.getElementById('chart-tabs').addEventListener('click', function(e) {
       var tab = e.target.closest('.chart-tab');
       if (!tab) return;
       var pair = tab.dataset.pair;
-      if (activeCharts.indexOf(pair) !== -1) return; // já está visível
 
-      // Substituir o último não-BTC
-      var replaceIdx = activeCharts.length - 1;
-      if (activeCharts[replaceIdx] === 'BTCUSDC' && activeCharts.length > 1) replaceIdx = activeCharts.length - 1;
+      // Se já está visível, nada a fazer
+      if (activeCharts.indexOf(pair) !== -1) return;
+
+      // BTC fica sempre no slot 0 — substituir o último slot não-BTC
+      var replaceIdx = -1;
+      for (var i = activeCharts.length - 1; i >= 0; i--) {
+        if (activeCharts[i] !== 'BTCUSDC') { replaceIdx = i; break; }
+      }
+      if (replaceIdx === -1) return; // Só BTC? Não deveria acontecer
+
       activeCharts[replaceIdx] = pair;
+      userOverride = true;
 
-      var fakePositions = activeCharts.filter(function(p) { return p !== 'BTCUSDC'; });
-      renderCharts(fakePositions);
+      buildChartGrid(activeCharts);
+      updateTabs();
     });
 
-    // Init default charts
-    renderCharts([]);
+    // Init — gráficos default
+    buildChartGrid(activeCharts);
+    updateTabs();
 
     // ─── FORMATTING ───
     function fmt(n, decimals) {
@@ -722,7 +751,7 @@
 
         // ─── UPDATE CHARTS ───
         var pairsInPosition = openPairs.map(function(p) { return p.symbol; });
-        renderCharts(pairsInPosition);
+        onSocketUpdateCharts(pairsInPosition);
       }
 
       // ─── LOG ───
