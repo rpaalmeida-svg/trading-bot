@@ -193,16 +193,34 @@ async function getVolume(symbol) {
   return parseFloat(res.data.quoteVolume);
 }
 
+// Step sizes Binance Spot — arredondar ANTES de enviar ordem
+function roundToStepSize(symbol, qty) {
+  if (symbol.includes('BTC'))  return Math.floor(qty * 100000) / 100000;  // 0.00001
+  if (symbol.includes('ETH'))  return Math.floor(qty * 10000) / 10000;    // 0.0001
+  if (symbol.includes('DOGE')) return Math.floor(qty);                     // 1
+  if (symbol.includes('ADA'))  return Math.floor(qty * 10) / 10;          // 0.1
+  if (symbol.includes('XRP'))  return Math.floor(qty * 10) / 10;          // 0.1
+  // BNB, SOL, LINK, SUI e outros: 0.01
+  return Math.floor(qty * 100) / 100;
+}
+
 async function placeOrder(symbol, side, quantity) {
   try {
+    const roundedQty = roundToStepSize(symbol, quantity);
+    if (roundedQty <= 0) {
+      throw new Error(`Quantidade arredondada a 0 para ${symbol} (original: ${quantity})`);
+    }
+    if (roundedQty !== quantity) {
+      logger.info(`Quantidade arredondada para ${symbol}`, { original: quantity, arredondada: roundedQty });
+    }
     const timestamp = Date.now();
-    const params = { symbol, side, type: 'MARKET', quantity, timestamp };
+    const params = { symbol, side, type: 'MARKET', quantity: roundedQty, timestamp };
     const query = new URLSearchParams(params).toString();
     const signature = sign(query);
     const res = await binanceHttp.post('/v3/order', null, {
       params: { ...params, signature }
     });
-    logger.trade(`Ordem executada: ${side} ${symbol}`, { symbol, quantity, orderId: res.data.orderId });
+    logger.trade(`Ordem executada: ${side} ${symbol}`, { symbol, quantity: roundedQty, orderId: res.data.orderId });
     return res.data;
   } catch (err) {
     const detail = err.response?.data || err.message;
