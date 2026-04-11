@@ -216,7 +216,7 @@
     .stat-value { font-family: var(--font-mono); font-size: 1.1rem; font-weight: 700; }
     .trades-list { margin-top: 4px; }
     .trade-row {
-      display: grid; grid-template-columns: 1fr 100px 1fr 80px;
+      display: grid; grid-template-columns: 1fr 90px 1fr 60px 60px 80px;
       align-items: center; padding: 10px 0; border-bottom: 1px solid var(--border);
       font-size: 0.8rem; gap: 8px;
     }
@@ -403,6 +403,10 @@
         <div class="stat-card">
           <div class="stat-label">Pior Trade</div>
           <div class="stat-value red" id="s-worst">—</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Duração Média</div>
+          <div class="stat-value blue" id="s-avgdur">—</div>
         </div>
       </div>
       <div class="trades-list" id="trades-list"></div>
@@ -591,6 +595,14 @@
       if (t === 'BEARISH') return '<span class="red">▼</span>';
       return '<span class="yellow">—</span>';
     }
+    function fmtDuration(min) {
+      if (!min && min !== 0) return '—';
+      if (min < 60) return min + 'm';
+      var h = Math.floor(min / 60), m = min % 60;
+      if (h < 24) return m > 0 ? h + 'h ' + m + 'm' : h + 'h';
+      var d = Math.floor(h / 24), rh = h % 24;
+      return rh > 0 ? d + 'd ' + rh + 'h' : d + 'd';
+    }
 
     // ─── SOCKET ───
     var socket = io();
@@ -660,15 +672,21 @@
       document.getElementById('s-losers').textContent = stats.losers || 0;
       document.getElementById('s-best').textContent = stats.bestTrade ? '+$' + fmt(stats.bestTrade.profit) : '—';
       document.getElementById('s-worst').textContent = stats.worstTrade ? '$' + fmt(stats.worstTrade.profit) : '—';
+      document.getElementById('s-avgdur').textContent = stats.avgDuration || '—';
 
       // ─── TRADES LIST ───
       if (stats.recentTrades && stats.recentTrades.length > 0) {
         document.getElementById('trades-list').innerHTML = stats.recentTrades.map(function(t) {
           var sym = t.symbol.replace('USDT', '/USDT').replace('USDC', '/USDC');
+          var pctText = t.profitPercent != null ? (t.profitPercent >= 0 ? '+' : '') + fmt(t.profitPercent) + '%' : '—';
+          var pctClass = t.profitPercent >= 0 ? 'green' : 'red';
+          var dur = fmtDuration(t.durationMinutes);
           return '<div class="trade-row">' +
             '<span class="trade-time">' + new Date(t.closeTimestamp).toLocaleString('pt-PT') + '</span>' +
             '<span class="trade-symbol">' + sym + '</span>' +
             '<span class="trade-prices">$' + fmt(t.price) + ' → $' + fmt(t.closePrice) + '</span>' +
+            '<span class="' + pctClass + '" style="font-family:var(--font-mono);font-size:0.75rem;">' + pctText + '</span>' +
+            '<span style="color:var(--muted);font-family:var(--font-mono);font-size:0.72rem;">' + dur + '</span>' +
             '<span class="trade-badge ' + (t.profit >= 0 ? 'badge-win' : 'badge-loss') + '">' + (t.profit >= 0 ? '+' : '') + '$' + fmt(t.profit) + '</span>' +
           '</div>';
         }).join('');

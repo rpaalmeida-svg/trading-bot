@@ -18,8 +18,12 @@ async function sendMessage(message) {
 }
 
 function formatStatus(data) {
-  const pairsInfo = data.pairs ? data.pairs.map(p => `
-${p.signal === 'BUY' ? '🟢' : p.signal === 'SELL' ? '🔴' : '⚪️'} <b>${p.symbol.replace('USDT', '/USDT')}</b> — RSI: ${p.rsi} | Score: ${p.score}/100 | ${p.inPosition ? '🔵 Em posição' : 'Aguardar'}`).join('') : '';
+  const pairsInfo = data.pairs ? data.pairs.map(p => {
+    const sym = p.symbol.replace('USDC', '');
+    const statusIcon = p.inPosition ? '🔵 Em posição' : 'Aguardar';
+    const trendIcon = p.trend4h === 'BULLISH' ? '▲' : p.trend4h === 'BEARISH' ? '▼' : '—';
+    return `\n  <b>${sym}USDC</b> — RSI: ${p.rsi} | Score: ${p.score}/100 | ${trendIcon} ${p.trend4h || '—'} | ${statusIcon}`;
+  }).join('') : '';
 
   const newsEmoji = data.news === 'POSITIVE' ? '📈' : data.news === 'NEGATIVE' ? '📉' : '📰';
   const newsTitlesText = data.newsTitles && data.newsTitles.length > 0
@@ -51,14 +55,36 @@ ${newsEmoji} Notícias: <b>${data.news}</b> (score: ${data.newsScore})${newsTitl
 
 function formatTrade(type, data) {
   const emoji = type === 'BUY' ? '🟢 COMPRA' : '🔴 VENDA';
+  const sym = data.symbol.replace('USDC', '/USDC');
+
+  if (type === 'BUY') {
+    return `
+${emoji} <b>Ordem Executada!</b>
+─────────────────────
+📊 Par: <b>${sym}</b>
+💵 Preço: <b>$${data.price}</b>
+📦 Quantidade: <b>${data.quantity}</b>
+🛑 Stop-Loss: $${data.stopLoss}
+🎯 Take-Profit: $${data.takeProfit}
+─────────────────────
+🕐 ${new Date().toLocaleString('pt-PT')}
+    `;
+  }
+
+  // VENDA — com P&L %, duração se disponível
+  const profitSign = parseFloat(data.profit) >= 0 ? '+' : '';
+  const profitEmoji = parseFloat(data.profit) >= 0 ? '✅' : '❌';
+  const pctText = data.profitPercent != null ? ` (${parseFloat(data.profitPercent) >= 0 ? '+' : ''}${data.profitPercent}%)` : '';
+  const durationText = data.duration ? `\n⏱ Duração: <b>${data.duration}</b>` : '';
+  const reasonText = data.reason ? `\n📋 Motivo: <b>${data.reason}</b>` : '';
+
   return `
 ${emoji} <b>Ordem Executada!</b>
 ─────────────────────
-📊 Par: <b>${data.symbol}</b>
+📊 Par: <b>${sym}</b>
 💵 Preço: <b>$${data.price}</b>
 📦 Quantidade: <b>${data.quantity}</b>
-${type === 'BUY' ? `🛑 Stop-Loss: $${data.stopLoss}
-🎯 Take-Profit: $${data.takeProfit}` : `💰 Resultado: <b>${data.profit >= 0 ? '+' : ''}$${data.profit}</b>`}
+${profitEmoji} Resultado: <b>${profitSign}$${data.profit}${pctText}</b>${durationText}${reasonText}
 ─────────────────────
 🕐 ${new Date().toLocaleString('pt-PT')}
   `;

@@ -9,7 +9,7 @@ const risk = require('./risk');
 const telegram = require('./telegram');
 const { getFearGreedIndex, getEmoji } = require('./sentiment');
 const { PAIRS, PAIR_CONFIG, calcScore, calcMacroScore, calcCompositeScore, allocateCapital, getReason, MIN_SCORE_TO_BUY, MAX_POSITIONS, MIN_TRADE_AMOUNT } = require('./portfolio');
-const { recordBuy, recordSell, getStats } = require('./history');
+const { recordBuy, recordSell, getStats, formatDuration } = require('./history');
 const { getNewsSentiment } = require('./news');
 const { initDB, saveState, loadState } = require('./database');
 const { checkAndRunScan } = require('./scanner');
@@ -505,13 +505,7 @@ async function runCycle() {
           const trade = await recordSell(symbol, currentPrice, 'TRAILING_TP');
           const profit = trade ? trade.profit : 0;
           const maxGainPct = (gainFromEntry * 100).toFixed(2);
-          await telegram.sendMessage(telegram.formatTrade('SELL', { symbol, price: currentPrice.toFixed(2), quantity: pos.quantity, profit: profit.toFixed(2) }));
-          await telegram.sendMessage(telegram.formatAlert(
-            `🎯 Trailing Take-Profit em ${symbol}!\n` +
-            `Máximo atingido: $${pos.highestPrice.toFixed(2)} (+${maxGainPct}%)\n` +
-            `Vendido a: $${currentPrice.toFixed(2)}\n` +
-            `Resultado: +$${profit.toFixed(2)}`
-          ));
+          await telegram.sendMessage(telegram.formatTrade('SELL', { symbol, price: currentPrice.toFixed(2), quantity: pos.quantity, profit: profit.toFixed(2), profitPercent: trade?.profitPercent, duration: formatDuration(trade?.durationMinutes), reason: 'Trailing Take-Profit' }));
           pos.inPosition = false; pos.entryPrice = null; pos.quantity = null;
           pos.highestPrice = null; pos.lastStopLoss = null;
           await persistPositions();
@@ -531,8 +525,8 @@ async function runCycle() {
           // ✅ Venda confirmada — agora sim, limpar posição
           const trade = await recordSell(symbol, currentPrice, 'STOP_LOSS');
           const profit = trade ? trade.profit : 0;
-          await telegram.sendMessage(telegram.formatTrade('SELL', { symbol, price: currentPrice.toFixed(2), quantity: pos.quantity, profit: profit.toFixed(2) }));
-          await telegram.sendMessage(telegram.formatAlert(`🛑 Stop-Loss activado em ${symbol}!\nResultado: ${profit >= 0 ? '+' : ''}$${profit.toFixed(2)}\n⏳ Cooldown de 2h activo.`));
+          await telegram.sendMessage(telegram.formatTrade('SELL', { symbol, price: currentPrice.toFixed(2), quantity: pos.quantity, profit: profit.toFixed(2), profitPercent: trade?.profitPercent, duration: formatDuration(trade?.durationMinutes), reason: 'Stop-Loss' }));
+          await telegram.sendMessage(telegram.formatAlert(`🛑 Stop-Loss em ${symbol} — Cooldown 2h activo.`));
           pos.inPosition = false; pos.entryPrice = null; pos.quantity = null;
           pos.highestPrice = null; pos.lastStopLoss = Date.now();
           await persistPositions();
@@ -552,8 +546,7 @@ async function runCycle() {
           // ✅ Venda confirmada — agora sim, limpar posição
           const trade = await recordSell(symbol, currentPrice, 'TAKE_PROFIT');
           const profit = trade ? trade.profit : 0;
-          await telegram.sendMessage(telegram.formatTrade('SELL', { symbol, price: currentPrice.toFixed(2), quantity: pos.quantity, profit: profit.toFixed(2) }));
-          await telegram.sendMessage(telegram.formatAlert(`🎯 Take-Profit atingido em ${symbol}!\nResultado: +$${profit.toFixed(2)}`));
+          await telegram.sendMessage(telegram.formatTrade('SELL', { symbol, price: currentPrice.toFixed(2), quantity: pos.quantity, profit: profit.toFixed(2), profitPercent: trade?.profitPercent, duration: formatDuration(trade?.durationMinutes), reason: 'Take-Profit' }));
           pos.inPosition = false; pos.entryPrice = null; pos.quantity = null;
           pos.highestPrice = null; pos.lastStopLoss = null;
           await persistPositions();
@@ -573,8 +566,7 @@ async function runCycle() {
           // ✅ Venda confirmada — agora sim, limpar posição
           const trade = await recordSell(symbol, currentPrice, 'SIGNAL');
           const profit = trade ? trade.profit : 0;
-          await telegram.sendMessage(telegram.formatTrade('SELL', { symbol, price: currentPrice.toFixed(2), quantity: pos.quantity, profit: profit.toFixed(2) }));
-          await telegram.sendMessage(telegram.formatAlert(`⚠️ Venda antecipada em ${symbol}\nSinal técnico + macro negativo\nResultado: ${profit >= 0 ? '+' : ''}$${profit.toFixed(2)}`));
+          await telegram.sendMessage(telegram.formatTrade('SELL', { symbol, price: currentPrice.toFixed(2), quantity: pos.quantity, profit: profit.toFixed(2), profitPercent: trade?.profitPercent, duration: formatDuration(trade?.durationMinutes), reason: 'Sinal técnico + macro negativo' }));
           pos.inPosition = false; pos.entryPrice = null; pos.quantity = null;
           pos.highestPrice = null; pos.lastStopLoss = Date.now();
           await persistPositions();
