@@ -8,11 +8,12 @@ const strategy = require('./strategy');
 const risk = require('./risk');
 const telegram = require('./telegram');
 const { getFearGreedIndex, getEmoji } = require('./sentiment');
-const { PAIRS, PAIR_CONFIG, calcScore, calcMacroScore, calcCompositeScore, allocateCapital, getReason, MIN_SCORE_TO_BUY, MAX_POSITIONS, MIN_TRADE_AMOUNT } = require('./portfolio');
+const { PAIRS, PAIR_CONFIG, calcTechnicalScore, calcMacroScore, calcCompositeScore, allocateCapital, getReason, MIN_SCORE_TO_BUY, MAX_POSITIONS, MIN_TRADE_AMOUNT } = require('./portfolio');
 const { recordBuy, recordSell, getStats, formatDuration } = require('./history');
 const { getNewsSentiment } = require('./news');
 const { initDB, saveState, loadState } = require('./database');
 const { checkAndRunScan } = require('./scanner');
+const { logBuySnapshot, logSellSnapshot } = require('./ml');
 
 // ─────────────────────────────────────────────────────
 // PROXY — IP Fixo via QuotaGuard (resolve problema de IP do Railway)
@@ -269,10 +270,17 @@ async function analyzePair(symbol, sentiment, macroData) {
       }
     }
 
-    const avgVolume = volume / 24;
-    const volumeRatio = avgVolume > 0 ? volume / avgVolume : 1;
+    // Volume ratio: última vela vs média das anteriores (FIX: antes era volume/24 / volume/24 = sempre 24)
+    const volumes = candles.map(c => c.volume);
+    const lastVolume = volumes[volumes.length - 1];
+    const prevVolumes = volumes.slice(0, -1);
+    const avgVolume = prevVolumes.length > 0 ? prevVolumes.reduce((a, b) => a + b, 0) / prevVolumes.length : 1;
+    const volumeRatio = avgVolume > 0 ? lastVolume / avgVolume : 1;
 
-    const technicalScore = rsi ? calcScore(rsi, sentiment.value, volumeRatio, pairConfig.rsiBuy) : 0;
+    const technicalScore = rsi ? calcTechnicalScore({
+      rsi, rsiBuy: pairConfig.rsiBuy, volumeRatio,
+      macd, bb, trend4h, candlePattern
+    }) : 0;
     const macroScore = calcMacroScore(macroData);
     const score = calcCompositeScore(technicalScore, macroScore);
 
@@ -294,7 +302,7 @@ async function analyzePair(symbol, sentiment, macroData) {
     return {
       symbol, currentPrice, score, technicalScore, macroScore, signal,
       rsi, smaFast, smaSlow, macd, bb, atrData, trend4h, candlePattern,
-      volume, candles,
+      volume, volumeRatio, candles,
       analysis: { rsi, smaFast, smaSlow, signal }
     };
   } catch (err) {
@@ -506,6 +514,7 @@ async function runCycle() {
           const profit = trade ? trade.profit : 0;
           const maxGainPct = (gainFromEntry * 100).toFixed(2);
           await telegram.sendMessage(telegram.formatTrade('SELL', { symbol, price: currentPrice.toFixed(2), quantity: pos.quantity, profit: profit.toFixed(2), profitPercent: trade?.profitPercent, duration: formatDuration(trade?.durationMinutes), reason: 'Trailing Take-Profit' }));
+          await logSellSnapshot(data, trade, 'TRAILING_TP', sentiment, news);
           pos.inPosition = false; pos.entryPrice = null; pos.quantity = null;
           pos.highestPrice = null; pos.lastStopLoss = null;
           await persistPositions();
@@ -527,6 +536,7 @@ async function runCycle() {
           const profit = trade ? trade.profit : 0;
           await telegram.sendMessage(telegram.formatTrade('SELL', { symbol, price: currentPrice.toFixed(2), quantity: pos.quantity, profit: profit.toFixed(2), profitPercent: trade?.profitPercent, duration: formatDuration(trade?.durationMinutes), reason: 'Stop-Loss' }));
           await telegram.sendMessage(telegram.formatAlert(`🛑 Stop-Loss em ${symbol} — Cooldown 2h activo.`));
+          await logSellSnapshot(data, trade, 'STOP_LOSS', sentiment, news);
           pos.inPosition = false; pos.entryPrice = null; pos.quantity = null;
           pos.highestPrice = null; pos.lastStopLoss = Date.now();
           await persistPositions();
@@ -547,6 +557,7 @@ async function runCycle() {
           const trade = await recordSell(symbol, currentPrice, 'TAKE_PROFIT');
           const profit = trade ? trade.profit : 0;
           await telegram.sendMessage(telegram.formatTrade('SELL', { symbol, price: currentPrice.toFixed(2), quantity: pos.quantity, profit: profit.toFixed(2), profitPercent: trade?.profitPercent, duration: formatDuration(trade?.durationMinutes), reason: 'Take-Profit' }));
+          await logSellSnapshot(data, trade, 'TAKE_PROFIT', sentiment, news);
           pos.inPosition = false; pos.entryPrice = null; pos.quantity = null;
           pos.highestPrice = null; pos.lastStopLoss = null;
           await persistPositions();
@@ -567,6 +578,7 @@ async function runCycle() {
           const trade = await recordSell(symbol, currentPrice, 'SIGNAL');
           const profit = trade ? trade.profit : 0;
           await telegram.sendMessage(telegram.formatTrade('SELL', { symbol, price: currentPrice.toFixed(2), quantity: pos.quantity, profit: profit.toFixed(2), profitPercent: trade?.profitPercent, duration: formatDuration(trade?.durationMinutes), reason: 'Sinal técnico + macro negativo' }));
+          await logSellSnapshot(data, trade, 'SIGNAL', sentiment, news);
           pos.inPosition = false; pos.entryPrice = null; pos.quantity = null;
           pos.highestPrice = null; pos.lastStopLoss = Date.now();
           await persistPositions();
@@ -698,6 +710,7 @@ async function runCycle() {
               await persistPositions();
 
               await recordBuy(alloc.symbol, alloc.currentPrice, qty, pos.stopLoss, pos.takeProfit);
+              await logBuySnapshot(alloc, news, sentiment);
 
               const reason = getReason(alloc.score, alloc.rsi, sentiment.value, news);
               const atrPctStr = alloc.atrData ? alloc.atrData.atrPct.toFixed(2) + '%' : 'N/A';

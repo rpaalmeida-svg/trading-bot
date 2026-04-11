@@ -12,18 +12,12 @@ const PAIR_CONFIG = {
   ETHUSDC: { interval: '1h',  rsiBuy: 35, rsiSell: 65, stopLoss: 0.025, takeProfit: 0.05 },
   BNBUSDC: { interval: '1h',  rsiBuy: 40, rsiSell: 60, stopLoss: 0.025, takeProfit: 0.05 },
 
-  // ─── Novos — configs conservadoras (RSI 35/65, 1h) ───
-  // SOL: alta volatilidade → SL mais largo, TP mais agressivo
+  // ─── Novos — configs conservadoras ───
   SOLUSDC: { interval: '1h',  rsiBuy: 35, rsiSell: 65, stopLoss: 0.030, takeProfit: 0.06 },
-  // XRP: menor volatilidade → parâmetros standard
   XRPUSDC: { interval: '1h',  rsiBuy: 35, rsiSell: 65, stopLoss: 0.025, takeProfit: 0.05 },
-  // LINK: volatilidade média-alta
   LINKUSDC: { interval: '1h',  rsiBuy: 35, rsiSell: 65, stopLoss: 0.030, takeProfit: 0.06 },
-  // ADA: menor volatilidade, movimentos mais lentos
   ADAUSDC: { interval: '1h',  rsiBuy: 35, rsiSell: 65, stopLoss: 0.025, takeProfit: 0.05 },
-  // DOGE: alta volatilidade, movimentos rápidos → SL/TP mais largos
   DOGEUSDC: { interval: '1h', rsiBuy: 35, rsiSell: 65, stopLoss: 0.035, takeProfit: 0.07 },
-  // SUI: novo, volátil → conservador
   SUIUSDC: { interval: '1h',  rsiBuy: 35, rsiSell: 65, stopLoss: 0.030, takeProfit: 0.06 },
 };
 
@@ -31,38 +25,91 @@ const MIN_SCORE_TO_BUY = 75;
 const MIN_SCORE_SECOND = 80;
 
 // Máximo de posições simultâneas
-// Com 9 pares e conta pequena, 3 posições dá diversificação sem diluir demais
 const MAX_POSITIONS = 3;
 
-// Mínimo por trade — Binance aceita ~$5 notional na maioria dos pares
+// Mínimo por trade
 const MIN_TRADE_AMOUNT = 5;
 
-// Score técnico — indicadores do par
-function calcScore(rsi, fearGreed, volumeRatio, rsiBuy) {
+// ─────────────────────────────────────────────────────
+// SCORE TÉCNICO — 100% indicadores individuais do par
+//
+// ANTES: Fear&Greed estava aqui (35%) → todos os pares iguais
+// AGORA: só indicadores por par → cada par tem score diferente
+//
+// Pesos:
+//   RSI posição ........... 30%
+//   Volume relativo ....... 15%
+//   MACD momentum ......... 15%
+//   Bollinger %B .......... 15%
+//   Tendência 4h .......... 15%
+//   Padrão de velas ....... 10%
+// ─────────────────────────────────────────────────────
+function calcTechnicalScore(indicators) {
+  const {
+    rsi, rsiBuy, volumeRatio,
+    macd, bb, trend4h, candlePattern
+  } = indicators;
+
+  // RSI — quão sobrevendido está (30%)
   const rsiScore = rsi <= rsiBuy ? 100
     : rsi <= rsiBuy + 5  ? 85
     : rsi <= rsiBuy + 10 ? 65
     : rsi <= rsiBuy + 20 ? 35
     : 10;
 
-  const fgScore = fearGreed <= 15 ? 100
-    : fearGreed <= 25 ? 90
-    : fearGreed <= 35 ? 70
-    : fearGreed <= 45 ? 50
-    : fearGreed <= 55 ? 30
-    : 10;
-
+  // Volume relativo — última vela vs média das anteriores (15%)
   const volScore = volumeRatio >= 2.0 ? 100
     : volumeRatio >= 1.5 ? 80
     : volumeRatio >= 1.0 ? 55
-    : 25;
+    : volumeRatio >= 0.5 ? 30
+    : 15;
 
-  // Pesos: RSI 45% | Fear&Greed 35% | Volume 20%
-  const score = (rsiScore * 0.45) + (fgScore * 0.35) + (volScore * 0.20);
+  // MACD momentum — escala-independente (15%)
+  let macdScore = 50;
+  if (macd) {
+    const histPositive = macd.histogram > 0;
+    const macdAboveSignal = macd.macdLine > macd.signalLine;
+    if (histPositive && macdAboveSignal) macdScore = 100;
+    else if (histPositive || macdAboveSignal) macdScore = 70;
+    else if (!histPositive && !macdAboveSignal) macdScore = 10;
+    else macdScore = 35;
+  }
+
+  // Bollinger %B — posição dentro das bandas (15%)
+  let bbScore = 50;
+  if (bb && bb.percentB != null) {
+    bbScore = bb.percentB <= 0.05 ? 100
+      : bb.percentB <= 0.15 ? 90
+      : bb.percentB <= 0.30 ? 70
+      : bb.percentB <= 0.50 ? 50
+      : bb.percentB <= 0.80 ? 25
+      : 10;
+  }
+
+  // Tendência 4h — confirmação macro do par (15%)
+  const trendScore = trend4h === 'BULLISH' ? 90
+    : trend4h === 'NEUTRAL' ? 50
+    : 10; // BEARISH
+
+  // Padrão de velas — confirmação price action (10%)
+  let patternScore = 50;
+  if (candlePattern === 'HAMMER') patternScore = 90;
+  else if (candlePattern === 'BULLISH_ENGULFING') patternScore = 85;
+  else if (candlePattern === 'BEARISH_ENGULFING') patternScore = 15;
+  else if (candlePattern === 'SHOOTING_STAR') patternScore = 20;
+  else if (candlePattern === 'NONE') patternScore = 50;
+
+  const score = (rsiScore * 0.30) +
+    (volScore * 0.15) +
+    (macdScore * 0.15) +
+    (bbScore * 0.15) +
+    (trendScore * 0.15) +
+    (patternScore * 0.10);
+
   return Math.round(score);
 }
 
-// Score macro — estado do mundo
+// Score macro — estado do mundo (igual para todos os pares)
 function calcMacroScore(macroData) {
   if (!macroData || !macroData.raw) return 50;
 
@@ -96,13 +143,17 @@ function calcMacroScore(macroData) {
   return Math.min(100, Math.max(0, Math.round(score)));
 }
 
-// Score composto — técnico + macro
+// ─────────────────────────────────────────────────────
+// SCORE COMPOSTO — técnico (75%) + macro (25%)
+//
+// ANTES: 60/40 → macro dominava, todos os pares ~71
+// AGORA: 75/25 → técnico individual domina, pares diferenciam-se
+// ─────────────────────────────────────────────────────
 function calcCompositeScore(technicalScore, macroScore) {
-  return Math.round(technicalScore * 0.60 + macroScore * 0.40);
+  return Math.round(technicalScore * 0.75 + macroScore * 0.25);
 }
 
-// Alocação de capital — ajustada para contas pequenas
-// maxSlots: quantas posições ainda podemos abrir
+// Alocação de capital
 function allocateCapital(signals, totalCapital, maxSlots = MAX_POSITIONS) {
   const candidates = signals
     .filter(s => s.score >= MIN_SCORE_TO_BUY)
@@ -113,7 +164,6 @@ function allocateCapital(signals, totalCapital, maxSlots = MAX_POSITIONS) {
     return [];
   }
 
-  // Limitar ao número de slots disponíveis
   const slotsAvailable = Math.min(candidates.length, maxSlots);
 
   // Conta pequena (<$50): concentrar no melhor par
@@ -121,11 +171,10 @@ function allocateCapital(signals, totalCapital, maxSlots = MAX_POSITIONS) {
     const selected = candidates.slice(0, Math.min(slotsAvailable, 1));
     return selected.map(s => ({
       ...s,
-      allocation: totalCapital * 0.95 // 95% do capital disponível no melhor par
+      allocation: totalCapital * 0.95
     }));
   }
 
-  // Conta normal: distribuir entre os melhores
   if (slotsAvailable === 1) {
     return [{ ...candidates[0], allocation: totalCapital * 0.95 }];
   }
@@ -158,7 +207,7 @@ function getReason(score, rsi, fearGreed, macroData) {
 module.exports = {
   PAIRS,
   PAIR_CONFIG,
-  calcScore,
+  calcTechnicalScore,
   calcMacroScore,
   calcCompositeScore,
   allocateCapital,
