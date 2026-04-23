@@ -209,4 +209,4 @@ module.exports = {
   MIN_SCORE_TO_BUY,
   MAX_POSITIONS,
   MIN_TRADE_AMOUNT
-};ß
+};
