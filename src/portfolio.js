@@ -7,8 +7,8 @@ const PAIRS = [
 ];
 
 const PAIR_CONFIG = {
-  // ─── Originais (mantidos) ───
-  BTCUSDC: { interval: '30m', rsiBuy: 40, rsiSell: 60, stopLoss: 0.025, takeProfit: 0.05 },
+  // ─── FIX: BTC de 30m→1h (menos ruído) e rsiBuy 40→35 (só compra sobrevendido real) ───
+  BTCUSDC: { interval: '1h',  rsiBuy: 35, rsiSell: 60, stopLoss: 0.025, takeProfit: 0.05 },
   ETHUSDC: { interval: '1h',  rsiBuy: 35, rsiSell: 65, stopLoss: 0.025, takeProfit: 0.05 },
   BNBUSDC: { interval: '1h',  rsiBuy: 40, rsiSell: 60, stopLoss: 0.025, takeProfit: 0.05 },
 
@@ -21,8 +21,10 @@ const PAIR_CONFIG = {
   SUIUSDC: { interval: '1h',  rsiBuy: 35, rsiSell: 65, stopLoss: 0.030, takeProfit: 0.06 },
 };
 
-const MIN_SCORE_TO_BUY = 75;
-const MIN_SCORE_SECOND = 80;
+// ─── FIX: 75→70 — o novo score técnico é mais conservador por design ───
+// 70 agora equivale ao 75 antigo (antes o F&G inflacionava ~10 pontos)
+const MIN_SCORE_TO_BUY = 70;
+const MIN_SCORE_SECOND = 75;
 
 // Máximo de posições simultâneas
 const MAX_POSITIONS = 3;
@@ -32,9 +34,6 @@ const MIN_TRADE_AMOUNT = 5;
 
 // ─────────────────────────────────────────────────────
 // SCORE TÉCNICO — 100% indicadores individuais do par
-//
-// ANTES: Fear&Greed estava aqui (35%) → todos os pares iguais
-// AGORA: só indicadores por par → cada par tem score diferente
 //
 // Pesos:
 //   RSI posição ........... 30%
@@ -143,12 +142,7 @@ function calcMacroScore(macroData) {
   return Math.min(100, Math.max(0, Math.round(score)));
 }
 
-// ─────────────────────────────────────────────────────
-// SCORE COMPOSTO — técnico (75%) + macro (25%)
-//
-// ANTES: 60/40 → macro dominava, todos os pares ~71
-// AGORA: 75/25 → técnico individual domina, pares diferenciam-se
-// ─────────────────────────────────────────────────────
+// Score composto — técnico (75%) + macro (25%)
 function calcCompositeScore(technicalScore, macroScore) {
   return Math.round(technicalScore * 0.75 + macroScore * 0.25);
 }
@@ -215,4 +209,4 @@ module.exports = {
   MIN_SCORE_TO_BUY,
   MAX_POSITIONS,
   MIN_TRADE_AMOUNT
-};
+};ß
